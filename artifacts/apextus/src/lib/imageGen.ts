@@ -7,7 +7,7 @@ function topicKey(topic: string): string {
 
 function buildPollinationsUrl(prompt: string, seed?: number): string {
   const encoded = encodeURIComponent(prompt);
-  const s = seed ?? Math.floor(Math.random() * 10000);
+  const s = seed ?? Math.floor(Math.random() * 99999);
   return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=800&height=450&nologo=true&seed=${s}`;
 }
 
@@ -17,6 +17,7 @@ export interface NoteImage {
   storagePath?: string;
 }
 
+/* ─── NOTES: generate 2 images, upload to Firebase Storage ─── */
 export async function generateNoteImages(
   cat: string,
   topic: string
@@ -57,11 +58,55 @@ async function uploadImageToStorage(imageUrl: string, path: string): Promise<str
   }
 }
 
+/* ─── QUIZ: return a single Pollinations URL for clinical illustration ─── */
+export function getQuizImageUrl(cat: string, tags: string[]): { url: string; caption: string } {
+  const topic = tags?.[0] || cat;
+  const seed = Math.floor(Math.random() * 99999);
+  const base = "medical clinical illustration educational diagram clean professional no text white background";
+
+  const overrides: Record<string, { prompt: string; caption: string }> = {
+    "Diabetes Mellitus": { prompt: `diabetes mellitus pancreas beta cells insulin resistance type2 pathophysiology diagram ${base}`, caption: "Diyabet Patofizyolojisi" },
+    "Kalp Yetmezliği": { prompt: `heart failure compensatory mechanisms RAAS neurohormonal activation diagram ${base}`, caption: "Kalp Yetmezliği" },
+    "Akut Böbrek Hasarı": { prompt: `acute kidney injury ATN prerenal intrinsic pathophysiology nephron ${base}`, caption: "Akut Böbrek Hasarı" },
+    "Miyokard Enfarktüsü": { prompt: `myocardial infarction STEMI coronary artery occlusion cardiac troponin ECG ${base}`, caption: "Miyokard Enfarktüsü" },
+    "Tüberküloz": { prompt: `tuberculosis mycobacterium granuloma lung pathology Ghon focus ${base}`, caption: "Tüberküloz Patolojisi" },
+    "Pnömoni": { prompt: `pneumonia lung consolidation alveolar exudate bacterial viral pathology ${base}`, caption: "Pnömoni" },
+    "Anemi": { prompt: `anemia types red blood cell morphology iron deficiency megaloblastic hemolytic ${base}`, caption: "Anemi Türleri" },
+    "Hipertansiyon": { prompt: `hypertension pathophysiology RAAS renin angiotensin aldosterone blood pressure ${base}`, caption: "Hipertansiyon Mekanizması" },
+    "Siroz": { prompt: `liver cirrhosis fibrosis portal hypertension hepatocyte injury ${base}`, caption: "Siroz" },
+    "Kronik Böbrek Hastalığı": { prompt: `chronic kidney disease nephron loss progression glomerulosclerosis fibrosis ${base}`, caption: "KBH Progresyonu" },
+  };
+
+  const catImages: Record<string, { prompt: string; caption: string }> = {
+    "Kardiyoloji": { prompt: `cardiology heart chambers valves ECG coronary artery anatomy clinical ${base}`, caption: "Kardiyoloji Klinik Görsel" },
+    "Göğüs Hastalıkları": { prompt: `pulmonology chest X-ray lung anatomy bronchial tree clinical ${base}`, caption: "Göğüs Hastalıkları Klinik Görsel" },
+    "Hematoloji": { prompt: `hematology blood smear peripheral film red cells white cells platelets ${base}`, caption: "Hematoloji Klinik Görsel" },
+    "Nefroloji": { prompt: `nephrology kidney nephron glomerulus tubule urine formation ${base}`, caption: "Nefroloji Klinik Görsel" },
+    "Endokrinoloji": { prompt: `endocrinology hormone pathway pituitary thyroid adrenal gland ${base}`, caption: "Endokrinoloji Klinik Görsel" },
+    "Gastroenteroloji": { prompt: `gastroenterology GI tract stomach intestine mucosal layer ${base}`, caption: "Gastroenteroloji Klinik Görsel" },
+    "Hepatoloji": { prompt: `hepatology liver histology lobule portal tract hepatocyte bile ${base}`, caption: "Hepatoloji Klinik Görsel" },
+    "Romatoloji": { prompt: `rheumatology joint synovial membrane autoimmune inflammation ${base}`, caption: "Romatoloji Klinik Görsel" },
+    "Onkoloji": { prompt: `oncology tumor cell cycle cancer hallmarks apoptosis ${base}`, caption: "Onkoloji Klinik Görsel" },
+    "Enfeksiyon Hastalıkları": { prompt: `infectious disease pathogen host interaction immune response antibiotics ${base}`, caption: "Enfeksiyon Klinik Görsel" },
+    "Geriatri": { prompt: `geriatrics aging organ function physiological changes elderly ${base}`, caption: "Geriatri Klinik Görsel" },
+  };
+
+  const p = overrides[topic] ?? catImages[cat] ?? {
+    prompt: `${topic} ${cat} medical clinical pathophysiology teaching illustration ${base}`,
+    caption: `${topic} — Klinik Görsel`,
+  };
+
+  return {
+    url: buildPollinationsUrl(p.prompt, seed),
+    caption: p.caption,
+  };
+}
+
 function getMedicalImagePrompts(
   cat: string,
   topic: string
 ): { prompt: string; caption: string }[] {
-  const base = `medical educational illustration, clean white background, professional anatomical diagram, high detail, no text labels, scientific style`;
+  const base = `medical educational illustration clean white background professional anatomical diagram high detail no text labels scientific style`;
 
   const catPrompts: Record<string, { prompt: string; caption: string }[]> = {
     Kardiyoloji: [

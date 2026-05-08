@@ -3,11 +3,19 @@ import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri, FREE_LIMITS } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
+import { getQuizImageUrl } from "@/lib/imageGen";
 import { qFingerprint, toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface Q extends QuizQuestion {
   _fid?: string;
+}
+
+interface QuizImg {
+  url: string;
+  caption: string;
+  loaded: boolean;
+  error: boolean;
 }
 
 export default function Quiz() {
@@ -34,6 +42,9 @@ export default function Quiz() {
   const [aiExp, setAiExp] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
+  // Per-question AI images: keyed by question index
+  const [qImages, setQImages] = useState<Record<number, QuizImg>>({});
+
   useEffect(() => {
     if (quizTarget) {
       setCat(quizTarget.cat);
@@ -41,6 +52,25 @@ export default function Quiz() {
       setQuizTarget(null);
     }
   }, [quizTarget, setQuizTarget]);
+
+  // Pre-generate image URLs for all questions when quiz starts
+  useEffect(() => {
+    if (phase === "quiz" && questions.length > 0) {
+      const imgs: Record<number, QuizImg> = {};
+      questions.forEach((q, i) => {
+        const { url, caption } = getQuizImageUrl(q.cat || cat, q.tags || []);
+        imgs[i] = { url, caption, loaded: false, error: false };
+      });
+      setQImages(imgs);
+    }
+  }, [phase, questions]);
+
+  function markImgLoaded(idx: number) {
+    setQImages((prev) => ({ ...prev, [idx]: { ...prev[idx], loaded: true } }));
+  }
+  function markImgError(idx: number) {
+    setQImages((prev) => ({ ...prev, [idx]: { ...prev[idx], error: true } }));
+  }
 
   function stopTimer() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -75,13 +105,13 @@ export default function Quiz() {
     setSelected(null);
     setAnswered(false);
     setAiExp(null);
+    setQImages({});
 
     try {
       const activeCat = cat === "Karışık"
         ? TREE[Math.floor(Math.random() * TREE.length)].cat
         : cat;
 
-      // Try Firebase cache first
       const cachedKey = topic || activeCat;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
@@ -260,7 +290,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
             AI Quiz
           </div>
           <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>
-            Mistral AI tarafından üretilen TUS tarzı klinik sorular
+            Mistral AI tarafından üretilen TUS tarzı klinik sorular · Pollinations.ai klinik görseller
           </div>
         </div>
 
@@ -452,6 +482,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
   const q = questions[current];
   if (!q) return null;
   const opts = ["A", "B", "C", "D", "E"];
+  const qImg = qImages[current];
 
   return (
     <div style={{ maxWidth: 680, margin: "0 auto" }}>
@@ -482,12 +513,39 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
       <div className="vc">
         <div className="vhdr">
           <span className="vlbl">Klinik Vaka — TUS Tarzı</span>
+          <span style={{ fontSize: ".65rem", color: "var(--t3)", marginLeft: "auto" }}>🖼 AI Görsel</span>
         </div>
         <div className="vbody">
           <div className="vnum">{current + 1}</div>
           <div className="vq">{q.vaka}</div>
           <div className="vsoru">{q.soru}</div>
         </div>
+
+        {/* AI-generated clinical image — always visible */}
+        {qImg && !qImg.error && (
+          <div className="quiz-img-wrap">
+            {!qImg.loaded && (
+              <div className="quiz-img-skeleton">
+                <span className="quiz-img-skeleton-icon">🔬</span>
+                <span className="quiz-img-skeleton-txt">Klinik görsel yükleniyor<span className="loading-dots" /></span>
+              </div>
+            )}
+            <img
+              src={qImg.url}
+              alt={qImg.caption}
+              className="quiz-img"
+              style={{ display: qImg.loaded ? "block" : "none" }}
+              onLoad={() => markImgLoaded(current)}
+              onError={() => markImgError(current)}
+            />
+            {qImg.loaded && (
+              <div className="quiz-img-caption">
+                <span style={{ color: "var(--teal)", marginRight: 5 }}>🖼</span>
+                {qImg.caption} — <em style={{ color: "var(--t3)" }}>Pollinations.ai FLUX</em>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Options */}
