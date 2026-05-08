@@ -1,21 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri, FREE_LIMITS } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
-import { getQuizImageUrl } from "@/lib/imageGen";
+import { getQuizImage, NoteImage } from "@/lib/imageGen";
 import { qFingerprint, toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface Q extends QuizQuestion {
   _fid?: string;
-}
-
-interface QuizImg {
-  url: string;
-  caption: string;
-  loaded: boolean;
-  error: boolean;
 }
 
 export default function Quiz() {
@@ -42,8 +35,9 @@ export default function Quiz() {
   const [aiExp, setAiExp] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Per-question AI images: keyed by question index
-  const [qImages, setQImages] = useState<Record<number, QuizImg>>({});
+  // Async Wikipedia image per question (keyed by index)
+  const [qImages, setQImages] = useState<Record<number, NoteImage | null>>({});
+  const [qImgLoading, setQImgLoading] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (quizTarget) {
@@ -53,24 +47,23 @@ export default function Quiz() {
     }
   }, [quizTarget, setQuizTarget]);
 
-  // Pre-generate image URLs for all questions when quiz starts
+  // Load Wikipedia image for the current question
   useEffect(() => {
-    if (phase === "quiz" && questions.length > 0) {
-      const imgs: Record<number, QuizImg> = {};
-      questions.forEach((q, i) => {
-        const { url, caption } = getQuizImageUrl(q.cat || cat, q.tags || []);
-        imgs[i] = { url, caption, loaded: false, error: false };
-      });
-      setQImages(imgs);
-    }
-  }, [phase, questions]);
+    if (phase !== "quiz" || !questions[current]) return;
+    if (qImages[current] !== undefined) return; // already loaded or null
 
-  function markImgLoaded(idx: number) {
-    setQImages((prev) => ({ ...prev, [idx]: { ...prev[idx], loaded: true } }));
-  }
-  function markImgError(idx: number) {
-    setQImages((prev) => ({ ...prev, [idx]: { ...prev[idx], error: true } }));
-  }
+    const q = questions[current];
+    setQImgLoading((prev) => ({ ...prev, [current]: true }));
+    setQImages((prev) => ({ ...prev, [current]: undefined as unknown as null })); // mark as loading
+
+    getQuizImage(q.cat || cat, q.tags || []).then((img) => {
+      setQImages((prev) => ({ ...prev, [current]: img }));
+      setQImgLoading((prev) => ({ ...prev, [current]: false }));
+    }).catch(() => {
+      setQImages((prev) => ({ ...prev, [current]: null }));
+      setQImgLoading((prev) => ({ ...prev, [current]: false }));
+    });
+  }, [phase, current, questions]);
 
   function stopTimer() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -85,10 +78,7 @@ export default function Quiz() {
       });
     }, 1000);
   }
-  function autoNext() {
-    setAnswered(true);
-    setSelected(-1);
-  }
+  function autoNext() { setAnswered(true); setSelected(-1); }
   useEffect(() => () => stopTimer(), []);
 
   async function generateQuestions() {
@@ -106,12 +96,10 @@ export default function Quiz() {
     setAnswered(false);
     setAiExp(null);
     setQImages({});
+    setQImgLoading({});
 
     try {
-      const activeCat = cat === "Karışık"
-        ? TREE[Math.floor(Math.random() * TREE.length)].cat
-        : cat;
-
+      const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
       const cachedKey = topic || activeCat;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
@@ -218,11 +206,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
   }
 
   function handleNext() {
-    if (current + 1 >= questions.length) {
-      stopTimer();
-      finishQuiz();
-      return;
-    }
+    if (current + 1 >= questions.length) { stopTimer(); finishQuiz(); return; }
     setCurrent((v) => v + 1);
     setSelected(null);
     setAnswered(false);
@@ -286,11 +270,9 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
     return (
       <div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>
-            AI Quiz
-          </div>
+          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>AI Quiz</div>
           <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>
-            Mistral AI tarafından üretilen TUS tarzı klinik sorular · Pollinations.ai klinik görseller
+            Mistral AI klinik vakalar · Wikipedia/Wikimedia Commons eğitici görseller
           </div>
         </div>
 
@@ -306,108 +288,48 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
         <div className="card">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
-              <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>
-                Kategori
-              </div>
-              <select
-                value={cat}
-                onChange={(e) => { setCat(e.target.value); setTopic(""); }}
-                style={{
-                  width: "100%", padding: "9px 12px", background: "var(--ink3)",
-                  border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)",
-                  fontFamily: "Syne, sans-serif", fontSize: ".84rem",
-                }}
-              >
+              <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>Kategori</div>
+              <select value={cat} onChange={(e) => { setCat(e.target.value); setTopic(""); }}
+                style={{ width: "100%", padding: "9px 12px", background: "var(--ink3)", border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)", fontFamily: "Syne, sans-serif", fontSize: ".84rem" }}>
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-
             <div>
-              <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>
-                Konu (isteğe bağlı)
-              </div>
-              <select
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                disabled={cat === "Karışık"}
-                style={{
-                  width: "100%", padding: "9px 12px", background: "var(--ink3)",
-                  border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)",
-                  fontFamily: "Syne, sans-serif", fontSize: ".84rem",
-                  opacity: cat === "Karışık" ? .5 : 1,
-                }}
-              >
+              <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>Konu (isteğe bağlı)</div>
+              <select value={topic} onChange={(e) => setTopic(e.target.value)} disabled={cat === "Karışık"}
+                style={{ width: "100%", padding: "9px 12px", background: "var(--ink3)", border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)", fontFamily: "Syne, sans-serif", fontSize: ".84rem", opacity: cat === "Karışık" ? .5 : 1 }}>
                 <option value="">— Tüm konular —</option>
                 {topicsOfCat.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-
             <div>
-              <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>
-                Soru Sayısı
-              </div>
+              <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>Soru Sayısı</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {[5, 10, 15, 20].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setCount(n)}
-                    style={{
-                      flex: 1, padding: "8px 4px", borderRadius: 9, border: "1.5px solid",
-                      cursor: "pointer", fontFamily: "Syne, sans-serif", fontSize: ".82rem", fontWeight: 700,
-                      background: count === n ? "var(--ac)" : "var(--ink3)",
-                      borderColor: count === n ? "var(--ac)" : "var(--line)",
-                      color: count === n ? "#fff" : "var(--t2)",
-                    }}
-                  >
+                  <button key={n} onClick={() => setCount(n)} style={{ flex: 1, padding: "8px 4px", borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontFamily: "Syne, sans-serif", fontSize: ".82rem", fontWeight: 700, background: count === n ? "var(--ac)" : "var(--ink3)", borderColor: count === n ? "var(--ac)" : "var(--line)", color: count === n ? "#fff" : "var(--t2)" }}>
                     {n}
                   </button>
                 ))}
               </div>
             </div>
-
             <div>
-              <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>
-                Zorluk
-              </div>
+              <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>Zorluk</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {["Kolay", "Orta", "Zor", "Karışık"].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setDiff(d)}
-                    style={{
-                      flex: 1, padding: "8px 4px", borderRadius: 9, border: "1.5px solid",
-                      cursor: "pointer", fontFamily: "Syne, sans-serif", fontSize: ".74rem", fontWeight: 700,
-                      background: diff === d ? "var(--teal)" : "var(--ink3)",
-                      borderColor: diff === d ? "var(--teal)" : "var(--line)",
-                      color: diff === d ? "var(--ink)" : "var(--t2)",
-                    }}
-                  >
+                  <button key={d} onClick={() => setDiff(d)} style={{ flex: 1, padding: "8px 4px", borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontFamily: "Syne, sans-serif", fontSize: ".74rem", fontWeight: 700, background: diff === d ? "var(--teal)" : "var(--ink3)", borderColor: diff === d ? "var(--teal)" : "var(--line)", color: diff === d ? "var(--ink)" : "var(--t2)" }}>
                     {d}
                   </button>
                 ))}
               </div>
             </div>
           </div>
-
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: ".82rem", color: "var(--t2)" }}>
-              <input
-                type="checkbox"
-                checked={timerMode}
-                onChange={(e) => setTimerMode(e.target.checked)}
-                style={{ accentColor: "var(--ac)" }}
-              />
+              <input type="checkbox" checked={timerMode} onChange={(e) => setTimerMode(e.target.checked)} style={{ accentColor: "var(--ac)" }} />
               90 sn zamanlayıcı
             </label>
           </div>
-
-          <button
-            className="btn btn-primary lg full"
-            style={{ marginTop: 20 }}
-            onClick={generateQuestions}
-          >
-            ✦ Quiz Başlat
-          </button>
+          <button className="btn btn-primary lg full" style={{ marginTop: 20 }} onClick={generateQuestions}>✦ Quiz Başlat</button>
         </div>
       </div>
     );
@@ -418,9 +340,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
       <div className="loading-screen">
         <div className="loading-orb">✦</div>
         <div className="loading-title">Sorular hazırlanıyor</div>
-        <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>
-          Mistral AI klinik vakalar oluşturuyor<span className="loading-dots" />
-        </div>
+        <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>Mistral AI klinik vakalar oluşturuyor<span className="loading-dots" /></div>
       </div>
     );
   }
@@ -432,31 +352,16 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
     return (
       <div className="rw">
         <div className="re">{emoji}</div>
-        <div className="rs" style={{ color: pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--gold)" : "var(--ac)" }}>
-          {pct}%
-        </div>
+        <div className="rs" style={{ color: pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--gold)" : "var(--ac)" }}>{pct}%</div>
         <div style={{ fontSize: ".82rem", color: "var(--t2)", marginBottom: 20 }}>{msg} {score}/{questions.length} doğru</div>
-
         <div className="rg">
-          <div className="rst">
-            <div className="rv" style={{ color: "var(--green)" }}>{score}</div>
-            <div className="rl2">Doğru</div>
-          </div>
-          <div className="rst">
-            <div className="rv" style={{ color: "var(--ac)" }}>{questions.length - score}</div>
-            <div className="rl2">Yanlış</div>
-          </div>
-          <div className="rst">
-            <div className="rv" style={{ color: "var(--teal)" }}>{questions.length}</div>
-            <div className="rl2">Toplam</div>
-          </div>
+          <div className="rst"><div className="rv" style={{ color: "var(--green)" }}>{score}</div><div className="rl2">Doğru</div></div>
+          <div className="rst"><div className="rv" style={{ color: "var(--ac)" }}>{questions.length - score}</div><div className="rl2">Yanlış</div></div>
+          <div className="rst"><div className="rv" style={{ color: "var(--teal)" }}>{questions.length}</div><div className="rl2">Toplam</div></div>
         </div>
-
         {wrongList.length > 0 && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--ac)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, textAlign: "left" }}>
-              Yanlış Cevaplar
-            </div>
+            <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--ac)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, textAlign: "left" }}>Yanlış Cevaplar</div>
             {wrongList.map(({ q }, i) => (
               <div key={i} style={{ background: "var(--rd)", border: "1px solid rgba(232,83,74,.2)", borderRadius: 9, padding: "12px 14px", marginBottom: 8, textAlign: "left" }}>
                 <div style={{ fontSize: ".78rem", color: "var(--t2)", marginBottom: 4 }}>{q.vaka?.slice(0, 120)}...</div>
@@ -466,14 +371,9 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
             ))}
           </div>
         )}
-
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-          <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); }}>
-            ✦ Yeni Quiz
-          </button>
-          <button className="btn btn-ghost" onClick={() => setCurrentPage("stats")}>
-            📊 İstatistikler
-          </button>
+          <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); }}>✦ Yeni Quiz</button>
+          <button className="btn btn-ghost" onClick={() => setCurrentPage("stats")}>📊 İstatistikler</button>
         </div>
       </div>
     );
@@ -483,15 +383,14 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
   if (!q) return null;
   const opts = ["A", "B", "C", "D", "E"];
   const qImg = qImages[current];
+  const qImgIsLoading = qImgLoading[current];
 
   return (
     <div style={{ maxWidth: 680, margin: "0 auto" }}>
       {/* Progress */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase" }}>
-            {current + 1} / {questions.length}
-          </span>
+          <span style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase" }}>{current + 1} / {questions.length}</span>
           <span className="tag tag-teal" style={{ fontSize: ".6rem" }}>{q.diff}</span>
           <span className="tag tag-gray" style={{ fontSize: ".6rem" }}>{q.cat}</span>
         </div>
@@ -513,7 +412,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
       <div className="vc">
         <div className="vhdr">
           <span className="vlbl">Klinik Vaka — TUS Tarzı</span>
-          <span style={{ fontSize: ".65rem", color: "var(--t3)", marginLeft: "auto" }}>🖼 AI Görsel</span>
+          <span style={{ fontSize: ".6rem", color: "var(--t3)", marginLeft: "auto" }}>📖 Wikipedia Görsel</span>
         </div>
         <div className="vbody">
           <div className="vnum">{current + 1}</div>
@@ -521,29 +420,27 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
           <div className="vsoru">{q.soru}</div>
         </div>
 
-        {/* AI-generated clinical image — always visible */}
-        {qImg && !qImg.error && (
+        {/* Wikipedia clinical image */}
+        {qImgIsLoading && (
           <div className="quiz-img-wrap">
-            {!qImg.loaded && (
-              <div className="quiz-img-skeleton">
-                <span className="quiz-img-skeleton-icon">🔬</span>
-                <span className="quiz-img-skeleton-txt">Klinik görsel yükleniyor<span className="loading-dots" /></span>
-              </div>
-            )}
+            <div className="quiz-img-skeleton">
+              <span className="quiz-img-skeleton-icon">📖</span>
+              <span className="quiz-img-skeleton-txt">Wikipedia'dan klinik görsel yükleniyor<span className="loading-dots" /></span>
+            </div>
+          </div>
+        )}
+        {!qImgIsLoading && qImg && (
+          <div className="quiz-img-wrap">
             <img
               src={qImg.url}
               alt={qImg.caption}
               className="quiz-img"
-              style={{ display: qImg.loaded ? "block" : "none" }}
-              onLoad={() => markImgLoaded(current)}
-              onError={() => markImgError(current)}
+              onError={(e) => { const w = (e.currentTarget as HTMLImageElement).closest(".quiz-img-wrap") as HTMLElement | null; if (w) w.style.display = "none"; }}
             />
-            {qImg.loaded && (
-              <div className="quiz-img-caption">
-                <span style={{ color: "var(--teal)", marginRight: 5 }}>🖼</span>
-                {qImg.caption} — <em style={{ color: "var(--t3)" }}>Pollinations.ai FLUX</em>
-              </div>
-            )}
+            <div className="quiz-img-caption">
+              <span style={{ color: "var(--teal)", marginRight: 5 }}>📖</span>
+              {qImg.caption} — <em style={{ color: "var(--t3)" }}>Wikipedia / Wikimedia Commons</em>
+            </div>
           </div>
         )}
       </div>
@@ -557,12 +454,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
             else if (i === selected) cls = "wrong";
           }
           return (
-            <button
-              key={i}
-              className={`opt-btn${cls ? " " + cls : ""}`}
-              disabled={answered}
-              onClick={() => handleSelect(i)}
-            >
+            <button key={i} className={`opt-btn${cls ? " " + cls : ""}`} disabled={answered} onClick={() => handleSelect(i)}>
               <span className="opt-letter">{opts[i]}</span>
               <span>{opt}</span>
             </button>
@@ -587,13 +479,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
           <div className={`ai-box-header${aiLoading ? " pulsing" : ""}`}>
             ✦ AI Açıklama
             {!aiExp && !aiLoading && (
-              <button
-                className="btn btn-teal sm"
-                style={{ marginLeft: "auto" }}
-                onClick={fetchAIExplain}
-              >
-                Analiz Et
-              </button>
+              <button className="btn btn-teal sm" style={{ marginLeft: "auto" }} onClick={fetchAIExplain}>Analiz Et</button>
             )}
           </div>
           {aiLoading && <div style={{ color: "var(--t2)", fontSize: ".8rem" }}>Mistral analiz yapıyor<span className="loading-dots" /></div>}

@@ -3,7 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { TREE, LINK_MAP, SR_INTERVALS, FREE_LIMITS } from "@/lib/data";
 import { mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
-import { generateNoteImages, buildImageHtml } from "@/lib/imageGen";
+import { generateNoteImages, NoteImage } from "@/lib/imageGen";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -17,6 +17,10 @@ export default function Notes() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [studyAdd, setStudyAdd] = useState(1);
 
+  // Images loaded separately so cached notes don't block on image fetch
+  const [noteImages, setNoteImages] = useState<NoteImage[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(false);
+
   useEffect(() => {
     if (noteTarget) {
       setSelectedCat(noteTarget.cat);
@@ -27,6 +31,7 @@ export default function Notes() {
 
   useEffect(() => {
     if (activeTopic) {
+      setNoteImages([]);
       loadNote(activeTopic.cat, activeTopic.icon, activeTopic.topic);
     }
   }, [activeTopic?.topic]);
@@ -42,6 +47,27 @@ export default function Notes() {
     saveState(s);
   }
 
+  async function fetchAndShowImages(cat: string, topic: string, savedHtml: string, savedLink: string, existingImgs: NoteImage[]) {
+    if (existingImgs.length > 0) {
+      setNoteImages(existingImgs);
+      return;
+    }
+    // No cached images → generate from Wikipedia
+    setImagesLoading(true);
+    try {
+      const imgs = await generateNoteImages(cat, topic);
+      setNoteImages(imgs);
+      if (imgs.length > 0) {
+        // Persist so next load is instant
+        fbSaveNote(topic, savedHtml, savedLink, imgs.map((i) => ({ url: i.url, caption: i.caption }))).catch(() => {});
+      }
+    } catch (_) {
+      // silently skip
+    } finally {
+      setImagesLoading(false);
+    }
+  }
+
   async function loadNote(cat: string, icon: string, topic: string) {
     if (noteCache[topic]) {
       setNoteHtml(noteCache[topic]);
@@ -54,17 +80,20 @@ export default function Notes() {
     }
     setNoteLoading(true);
     setNoteHtml(null);
+    setNoteImages([]);
     srMarkRead(topic);
 
     try {
       const cached = await fbGetNote(topic);
       if (cached?.html) {
-        const images = cached.images || [];
-        const imgHtml = images.length ? buildImageHtml(images) : "";
-        const full = buildNoteHtml(cat, topic, cached.html, cached.linkHtml || "", imgHtml);
+        // Show note immediately — images loaded separately
+        const full = buildNoteHtml(cat, topic, cached.html, cached.linkHtml || "");
         noteCache[topic] = full;
         setNoteHtml(full);
         setNoteLoading(false);
+
+        const existingImgs: NoteImage[] = (cached.images || []).map((i) => ({ url: i.url, caption: i.caption }));
+        fetchAndShowImages(cat, topic, cached.html, cached.linkHtml || "", existingImgs);
         return;
       }
     } catch (_) {}
@@ -77,17 +106,7 @@ export default function Notes() {
       const cleanHtml = cleanContent(html);
       const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
 
-      // Generate images (in background)
-      let imgHtml = "";
-      try {
-        const imgs = await generateNoteImages(cat, topic);
-        imgHtml = buildImageHtml(imgs);
-        fbSaveNote(topic, cleanHtml, cleanLink, imgs.map((i) => ({ url: i.url, caption: i.caption }))).catch(() => {});
-      } catch (_) {
-        fbSaveNote(topic, cleanHtml, cleanLink).catch(() => {});
-      }
-
-      const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink, imgHtml);
+      const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
       setNoteHtml(full);
 
@@ -96,6 +115,10 @@ export default function Notes() {
         saveState(ns);
       }
       toast.success(`${topic} notu yüklendi`);
+
+      // Generate images in background — don't block note display
+      setNoteLoading(false);
+      fetchAndShowImages(cat, topic, cleanHtml, cleanLink, []);
     } catch (e) {
       toast.error("Not yüklenemedi: " + (e as Error).message);
       setNoteHtml(`<div style="color:var(--ac)">Yükleme hatası: ${(e as Error).message}</div>`);
@@ -104,7 +127,7 @@ export default function Notes() {
     }
   }
 
-  function buildNoteHtml(cat: string, topic: string, html: string, linkHtml: string, imgHtml = "") {
+  function buildNoteHtml(cat: string, topic: string, html: string, linkHtml: string) {
     const links = LINK_MAP[topic] || [];
     const linkBoxHtml = links.length
       ? `<div class="link-box"><div class="link-box-hdr">🔗 Bağlantı Haritası — İlgili Konular (${links.length})</div>${links
@@ -114,7 +137,7 @@ export default function Notes() {
           )
           .join("")}</div>`
       : "";
-    return `${imgHtml}${html}<hr style="border-color:var(--line);margin:24px 0">${linkHtml}${linkBoxHtml}`;
+    return `${html}<hr style="border-color:var(--line);margin:24px 0">${linkHtml}${linkBoxHtml}`;
   }
 
   function cleanContent(s: string) {
@@ -129,6 +152,7 @@ export default function Notes() {
   async function refreshNote(cat: string, icon: string, topic: string) {
     delete noteCache[topic];
     await fbDeleteNote(topic);
+    setNoteImages([]);
     await loadNote(cat, icon, topic);
   }
 
@@ -152,12 +176,7 @@ export default function Notes() {
   return (
     <div style={{ display: "flex", gap: 18, minHeight: "70vh" }}>
       {/* Sidebar */}
-      <div
-        style={{
-          width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6,
-        }}
-        className="notes-sidebar"
-      >
+      <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6 }} className="notes-sidebar">
         <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.15rem", fontWeight: 900, color: "var(--cream)", marginBottom: 6 }}>
           Konu Notları
         </div>
@@ -177,9 +196,7 @@ export default function Notes() {
             >
               <span>{b.icon}</span>
               <span style={{ flex: 1 }}>{b.cat}</span>
-              <span style={{ fontSize: ".6rem", color: "var(--t3)" }}>
-                {selectedCat === b.cat ? "▾" : "▸"}
-              </span>
+              <span style={{ fontSize: ".6rem", color: "var(--t3)" }}>{selectedCat === b.cat ? "▾" : "▸"}</span>
             </button>
 
             {selectedCat === b.cat && (
@@ -190,10 +207,7 @@ export default function Notes() {
                   return (
                     <button
                       key={t}
-                      onClick={() => {
-                        setActiveTopic({ cat: b.cat, icon: b.icon, topic: t });
-                        setSelectedCat(b.cat);
-                      }}
+                      onClick={() => { setActiveTopic({ cat: b.cat, icon: b.icon, topic: t }); setSelectedCat(b.cat); }}
                       style={{
                         padding: "5px 9px", borderRadius: 7, border: "none", cursor: "pointer",
                         background: isActive ? "rgba(45,212,191,.1)" : "transparent",
@@ -223,9 +237,7 @@ export default function Notes() {
         {!activeTopic ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, color: "var(--t2)", textAlign: "center" }}>
             <div style={{ fontSize: "3rem", marginBottom: 14 }}>📚</div>
-            <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.2rem", fontWeight: 700, color: "var(--cream)", marginBottom: 8 }}>
-              Konu Seç
-            </div>
+            <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.2rem", fontWeight: 700, color: "var(--cream)", marginBottom: 8 }}>Konu Seç</div>
             <div style={{ fontSize: ".82rem" }}>Sol menüden bir kategori ve konu seçerek detaylı TUS notuna ulaşabilirsin.</div>
           </div>
         ) : (
@@ -241,29 +253,17 @@ export default function Notes() {
                     <span className="tag tag-red">{activeTopic.cat}</span>
                     <span className="tag tag-teal">TUS Odaklı</span>
                     <span className="tag tag-purple">🔗 Bağlantı Haritası</span>
-                    {noteLoading && <span className="tag tag-gold">AI üretiyor...</span>}
+                    {(noteLoading || imagesLoading) && <span className="tag tag-gold">{noteLoading ? "AI üretiyor..." : "🖼 Görseller yükleniyor..."}</span>}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                  <button
-                    className="btn btn-ghost sm"
-                    onClick={() => refreshNote(activeTopic.cat, activeTopic.icon, activeTopic.topic)}
-                    disabled={noteLoading}
-                  >
+                  <button className="btn btn-ghost sm" onClick={() => refreshNote(activeTopic.cat, activeTopic.icon, activeTopic.topic)} disabled={noteLoading}>
                     ↺ Yenile
                   </button>
-                  <button
-                    className="btn btn-teal sm"
-                    onClick={() => {
-                      setQuizTarget({ cat: activeTopic.cat, topic: activeTopic.topic });
-                      setCurrentPage("quiz");
-                    }}
-                  >
+                  <button className="btn btn-teal sm" onClick={() => { setQuizTarget({ cat: activeTopic.cat, topic: activeTopic.topic }); setCurrentPage("quiz"); }}>
                     📋 Quiz
                   </button>
-                  <button className="btn btn-gold sm" onClick={() => setCurrentPage("review")}>
-                    ⏰ Tekrar
-                  </button>
+                  <button className="btn btn-gold sm" onClick={() => setCurrentPage("review")}>⏰ Tekrar</button>
                 </div>
               </div>
 
@@ -274,14 +274,7 @@ export default function Notes() {
                   <strong>Çalışma Sayısı</strong>
                   Bu konuyu toplam kaç kez çalıştın
                 </div>
-                <input
-                  className="study-add-inp"
-                  type="number"
-                  min={1}
-                  max={99}
-                  value={studyAdd}
-                  onChange={(e) => setStudyAdd(parseInt(e.target.value) || 1)}
-                />
+                <input className="study-add-inp" type="number" min={1} max={99} value={studyAdd} onChange={(e) => setStudyAdd(parseInt(e.target.value) || 1)} />
                 <button className="btn btn-teal sm" onClick={() => adjustStudyCount(1)}>+ Ekle</button>
                 <button className="btn btn-ghost sm" onClick={() => adjustStudyCount(-1)}>− Çıkar</button>
               </div>
@@ -293,11 +286,36 @@ export default function Notes() {
                 <div className="loading-orb">📚</div>
                 <div className="loading-title">{activeTopic.topic}</div>
                 <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>
-                  Detaylı TUS notu + bağlantı haritası + görseller hazırlanıyor<span className="loading-dots" />
+                  Detaylı TUS notu + bağlantı haritası hazırlanıyor<span className="loading-dots" />
                 </div>
               </div>
             ) : noteHtml ? (
               <div className="card">
+                {/* Wikipedia images rendered as React JSX */}
+                {imagesLoading && (
+                  <div className="wiki-img-loading">
+                    <span className="wiki-img-loading-icon">🔬</span>
+                    <span>Wikipedia'dan eğitici görseller yükleniyor<span className="loading-dots" /></span>
+                  </div>
+                )}
+                {noteImages.length > 0 && (
+                  <div className="note-images-grid" style={{ marginBottom: 20 }}>
+                    {noteImages.map((img, i) => (
+                      <figure key={i} className="note-image-figure">
+                        <img
+                          src={img.url}
+                          alt={img.caption}
+                          className="note-image"
+                          loading="lazy"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).closest("figure")!.style.display = "none"; }}
+                        />
+                        <figcaption className="note-image-caption">
+                          📖 {img.caption} — <em>Wikipedia / Wikimedia Commons</em>
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                )}
                 <div className="nb" dangerouslySetInnerHTML={{ __html: noteHtml }} />
               </div>
             ) : null}

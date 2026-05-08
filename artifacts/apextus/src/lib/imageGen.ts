@@ -1,182 +1,260 @@
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "./firebase";
-
-function topicKey(topic: string): string {
-  return topic.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ]/g, "_").substring(0, 80);
-}
-
-function buildPollinationsUrl(prompt: string, seed?: number): string {
-  const encoded = encodeURIComponent(prompt);
-  const s = seed ?? Math.floor(Math.random() * 99999);
-  return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=800&height=450&nologo=true&seed=${s}`;
-}
-
 export interface NoteImage {
   url: string;
   caption: string;
-  storagePath?: string;
 }
 
-/* ─── NOTES: generate 2 images, upload to Firebase Storage ─── */
-export async function generateNoteImages(
-  cat: string,
-  topic: string
-): Promise<NoteImage[]> {
-  const prompts = getMedicalImagePrompts(cat, topic);
-  const images: NoteImage[] = [];
-
-  for (let i = 0; i < prompts.length; i++) {
-    const { prompt, caption } = prompts[i];
-    const seed = i * 1337 + 42;
-    const pollinationsUrl = buildPollinationsUrl(prompt, seed);
-
-    try {
-      const storagePath = `notes-images/${topicKey(topic)}/${i}.jpg`;
-      const storageUrl = await uploadImageToStorage(pollinationsUrl, storagePath);
-      images.push({ url: storageUrl || pollinationsUrl, caption, storagePath });
-    } catch (_) {
-      images.push({ url: pollinationsUrl, caption });
-    }
-  }
-
-  return images;
-}
-
-async function uploadImageToStorage(imageUrl: string, path: string): Promise<string | null> {
+/* ── Wikipedia article → thumbnail ──────────────────────────── */
+async function fetchWikiImage(articleTitle: string): Promise<NoteImage | null> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch(imageUrl, { signal: controller.signal });
-    clearTimeout(timeout);
+    const params = new URLSearchParams({
+      action: "query",
+      titles: articleTitle,
+      prop: "pageimages",
+      piprop: "thumbnail|original",
+      pithumbsize: "800",
+      pilicense: "any",
+      format: "json",
+      origin: "*",
+    });
+    const resp = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
+      signal: AbortSignal.timeout(8000),
+    });
     if (!resp.ok) return null;
-    const blob = await resp.blob();
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
-    return await getDownloadURL(storageRef);
+    const data = await resp.json();
+    const pages = Object.values(data?.query?.pages || {}) as Record<string, unknown>[];
+    const page = pages[0] as { thumbnail?: { source?: string }; original?: { source?: string } } | undefined;
+    if (!page) return null;
+    const src = page.thumbnail?.source || page.original?.source;
+    if (!src) return null;
+    // request 800-px version from Wikimedia thumb server
+    const large = src.replace(/\/\d+px-/, "/800px-");
+    return { url: large, caption: articleTitle };
   } catch (_) {
     return null;
   }
 }
 
-/* ─── QUIZ: return a single Pollinations URL for clinical illustration ─── */
-export function getQuizImageUrl(cat: string, tags: string[]): { url: string; caption: string } {
-  const topic = tags?.[0] || cat;
-  const seed = Math.floor(Math.random() * 99999);
-  const base = "medical clinical illustration educational diagram clean professional no text white background";
-
-  const overrides: Record<string, { prompt: string; caption: string }> = {
-    "Diabetes Mellitus": { prompt: `diabetes mellitus pancreas beta cells insulin resistance type2 pathophysiology diagram ${base}`, caption: "Diyabet Patofizyolojisi" },
-    "Kalp Yetmezliği": { prompt: `heart failure compensatory mechanisms RAAS neurohormonal activation diagram ${base}`, caption: "Kalp Yetmezliği" },
-    "Akut Böbrek Hasarı": { prompt: `acute kidney injury ATN prerenal intrinsic pathophysiology nephron ${base}`, caption: "Akut Böbrek Hasarı" },
-    "Miyokard Enfarktüsü": { prompt: `myocardial infarction STEMI coronary artery occlusion cardiac troponin ECG ${base}`, caption: "Miyokard Enfarktüsü" },
-    "Tüberküloz": { prompt: `tuberculosis mycobacterium granuloma lung pathology Ghon focus ${base}`, caption: "Tüberküloz Patolojisi" },
-    "Pnömoni": { prompt: `pneumonia lung consolidation alveolar exudate bacterial viral pathology ${base}`, caption: "Pnömoni" },
-    "Anemi": { prompt: `anemia types red blood cell morphology iron deficiency megaloblastic hemolytic ${base}`, caption: "Anemi Türleri" },
-    "Hipertansiyon": { prompt: `hypertension pathophysiology RAAS renin angiotensin aldosterone blood pressure ${base}`, caption: "Hipertansiyon Mekanizması" },
-    "Siroz": { prompt: `liver cirrhosis fibrosis portal hypertension hepatocyte injury ${base}`, caption: "Siroz" },
-    "Kronik Böbrek Hastalığı": { prompt: `chronic kidney disease nephron loss progression glomerulosclerosis fibrosis ${base}`, caption: "KBH Progresyonu" },
-  };
-
-  const catImages: Record<string, { prompt: string; caption: string }> = {
-    "Kardiyoloji": { prompt: `cardiology heart chambers valves ECG coronary artery anatomy clinical ${base}`, caption: "Kardiyoloji Klinik Görsel" },
-    "Göğüs Hastalıkları": { prompt: `pulmonology chest X-ray lung anatomy bronchial tree clinical ${base}`, caption: "Göğüs Hastalıkları Klinik Görsel" },
-    "Hematoloji": { prompt: `hematology blood smear peripheral film red cells white cells platelets ${base}`, caption: "Hematoloji Klinik Görsel" },
-    "Nefroloji": { prompt: `nephrology kidney nephron glomerulus tubule urine formation ${base}`, caption: "Nefroloji Klinik Görsel" },
-    "Endokrinoloji": { prompt: `endocrinology hormone pathway pituitary thyroid adrenal gland ${base}`, caption: "Endokrinoloji Klinik Görsel" },
-    "Gastroenteroloji": { prompt: `gastroenterology GI tract stomach intestine mucosal layer ${base}`, caption: "Gastroenteroloji Klinik Görsel" },
-    "Hepatoloji": { prompt: `hepatology liver histology lobule portal tract hepatocyte bile ${base}`, caption: "Hepatoloji Klinik Görsel" },
-    "Romatoloji": { prompt: `rheumatology joint synovial membrane autoimmune inflammation ${base}`, caption: "Romatoloji Klinik Görsel" },
-    "Onkoloji": { prompt: `oncology tumor cell cycle cancer hallmarks apoptosis ${base}`, caption: "Onkoloji Klinik Görsel" },
-    "Enfeksiyon Hastalıkları": { prompt: `infectious disease pathogen host interaction immune response antibiotics ${base}`, caption: "Enfeksiyon Klinik Görsel" },
-    "Geriatri": { prompt: `geriatrics aging organ function physiological changes elderly ${base}`, caption: "Geriatri Klinik Görsel" },
-  };
-
-  const p = overrides[topic] ?? catImages[cat] ?? {
-    prompt: `${topic} ${cat} medical clinical pathophysiology teaching illustration ${base}`,
-    caption: `${topic} — Klinik Görsel`,
-  };
-
-  return {
-    url: buildPollinationsUrl(p.prompt, seed),
-    caption: p.caption,
-  };
+/* ── Wikimedia Commons full-text search (fallback) ──────────── */
+async function searchCommonsImage(query: string): Promise<NoteImage | null> {
+  try {
+    const params = new URLSearchParams({
+      action: "query",
+      generator: "search",
+      gsrsearch: query,
+      gsrnamespace: "6",
+      gsrlimit: "20",
+      prop: "imageinfo",
+      iiprop: "url|mime|size",
+      iiurlwidth: "800",
+      format: "json",
+      origin: "*",
+    });
+    const resp = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const pages = Object.values(data?.query?.pages || {}) as Record<string, unknown>[];
+    for (const p of pages) {
+      const page = p as { imageinfo?: { mime?: string; thumburl?: string; url?: string; thumbwidth?: number; width?: number }[]; title?: string };
+      const ii = page.imageinfo?.[0];
+      if (!ii) continue;
+      const mime = ii.mime || "";
+      if (!mime.includes("jpeg") && !mime.includes("png")) continue;
+      const w = ii.thumbwidth || ii.width || 0;
+      if (w < 300) continue;
+      const src = ii.thumburl || ii.url;
+      if (!src) continue;
+      const cap = String(page.title || "").replace("File:", "").replace(/_/g, " ").replace(/\.[^.]+$/, "");
+      return { url: src, caption: cap };
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
 }
 
-function getMedicalImagePrompts(
-  cat: string,
-  topic: string
-): { prompt: string; caption: string }[] {
-  const base = `medical educational illustration clean white background professional anatomical diagram high detail no text labels scientific style`;
-
-  const catPrompts: Record<string, { prompt: string; caption: string }[]> = {
-    Kardiyoloji: [
-      { prompt: `human heart anatomy detailed cross-section showing chambers valves coronary arteries, ${base}`, caption: "Kalp Anatomisi ve Koroner Arterler" },
-      { prompt: `ECG electrocardiogram waveform diagram PQRST labeled medical education, ${base}`, caption: "EKG Dalga Morfolojisi" },
-    ],
-    "Göğüs Hastalıkları": [
-      { prompt: `human lungs detailed anatomy showing bronchial tree alveoli pulmonary vessels, ${base}`, caption: "Akciğer Anatomisi" },
-      { prompt: `spirometry lung function test graph showing obstructive restrictive patterns FEV1 FVC, ${base}`, caption: "Solunum Fonksiyon Testi Grafikleri" },
-    ],
-    Hematoloji: [
-      { prompt: `blood cell types erythrocytes leukocytes platelets hematopoiesis diagram, ${base}`, caption: "Kan Hücreleri ve Hematopoez" },
-      { prompt: `coagulation cascade diagram showing intrinsic extrinsic pathway fibrin clot formation, ${base}`, caption: "Koagülasyon Kaskadı" },
-    ],
-    Nefroloji: [
-      { prompt: `kidney nephron detailed anatomy showing glomerulus tubules collecting duct, ${base}`, caption: "Nefron Anatomisi" },
-      { prompt: `acid base balance diagram pH bicarbonate compensation respiratory metabolic, ${base}`, caption: "Asit-Baz Dengesi" },
-    ],
-    Onkoloji: [
-      { prompt: `cancer cell cycle tumor growth hallmarks oncogenesis molecular pathway diagram, ${base}`, caption: "Kanser Hücre Biyolojisi" },
-    ],
-    Geriatri: [
-      { prompt: `aging physiological changes human body systems organ function decline diagram, ${base}`, caption: "Yaşlanmanın Fizyolojik Etkileri" },
-    ],
-    Endokrinoloji: [
-      { prompt: `endocrine system glands hormones pituitary thyroid adrenal pancreas anatomy diagram, ${base}`, caption: "Endokrin Sistem Anatomisi" },
-      { prompt: `insulin glucose regulation pancreas beta cells mechanism diagram, ${base}`, caption: "İnsülin-Glukoz Regulasyonu" },
-    ],
-    Romatoloji: [
-      { prompt: `joint anatomy synovial membrane cartilage rheumatoid arthritis pathology diagram, ${base}`, caption: "Eklem Anatomisi ve Patoloji" },
-      { prompt: `autoimmune disease pathway immune complex complement activation diagram, ${base}`, caption: "Otoimmün Mekanizmalar" },
-    ],
-    Hepatoloji: [
-      { prompt: `liver anatomy hepatic lobule portal triad bile duct hepatocytes microscopic, ${base}`, caption: "Karaciğer Histolojisi" },
-      { prompt: `liver cirrhosis fibrosis progression Child-Pugh scoring diagram, ${base}`, caption: "Siroz Progresyonu" },
-    ],
-    Gastroenteroloji: [
-      { prompt: `gastrointestinal tract anatomy detailed stomach intestines histology, ${base}`, caption: "GİS Anatomisi" },
-      { prompt: `peptic ulcer disease gastric mucosal barrier H pylori pathogenesis diagram, ${base}`, caption: "Peptik Ülser Patofizyolojisi" },
-    ],
-    "Enfeksiyon Hastalıkları": [
-      { prompt: `pathogen host interaction immune response infection chain diagram, ${base}`, caption: "Enfeksiyon Zinciri ve İmmün Yanıt" },
-      { prompt: `antibiotic mechanism of action bacterial cell wall protein synthesis DNA, ${base}`, caption: "Antibiyotik Etki Mekanizmaları" },
-    ],
-  };
-
-  const topicOverrides: Record<string, { prompt: string; caption: string }[]> = {
-    "Diabetes Mellitus": [
-      { prompt: `diabetes mellitus type 1 type 2 insulin resistance pathophysiology diagram, ${base}`, caption: "Diyabet Patofizyolojisi" },
-      { prompt: `diabetic complications retinopathy nephropathy neuropathy angiopathy diagram, ${base}`, caption: "Diyabetin Kronik Komplikasyonları" },
-    ],
-    "Akut Böbrek Hasarı": [
-      { prompt: `acute kidney injury prerenal intrinsic postrenal causes pathophysiology ATN diagram, ${base}`, caption: "AKI Patofizyolojisi ve Nedenleri" },
-    ],
-    "Kalp Yetmezliği": [
-      { prompt: `heart failure pathophysiology compensatory mechanisms neurohormonal activation RAAS diagram, ${base}`, caption: "Kalp Yetmezliği Patofizyolojisi" },
-    ],
-    Tüberküloz: [
-      { prompt: `tuberculosis mycobacterium infection granuloma formation lung pathology diagram, ${base}`, caption: "TB Granülom Patogenezi" },
-    ],
-    "Karaciğer Sirozu ve Komplikasyonları": [
-      { prompt: `liver cirrhosis portal hypertension complications varices ascites hepatic encephalopathy, ${base}`, caption: "Siroz Komplikasyonları" },
-    ],
-  };
-
-  return topicOverrides[topic] ?? catPrompts[cat] ?? [
-    { prompt: `${topic} medical diagram pathophysiology clinical presentation, ${base}`, caption: `${topic} — Klinik Özet` },
-  ];
+/* ── Per-topic Wikipedia article & Commons query map ───────── */
+interface TopicMedia {
+  articles: string[];  // Wikipedia article titles → thumbnail
+  query: string;       // Commons fallback search query
 }
 
+const TOPIC_MAP: Record<string, TopicMedia> = {
+  // Kardiyoloji
+  "Kalbin Fizyolojisi":                   { articles: ["Heart", "Cardiac cycle"], query: "heart anatomy diagram" },
+  "Kardiyovasküler Sistem Muayenesi":      { articles: ["Cardiovascular examination"], query: "cardiovascular examination auscultation" },
+  "Kalp Hastalıklarında Belirtiler":       { articles: ["Heart failure signs and symptoms"], query: "heart disease symptoms diagram" },
+  "Kalp Hastalıklarında Tanı Yöntemleri": { articles: ["Echocardiography", "Electrocardiography"], query: "ECG electrocardiogram medical" },
+  "Kalp Yetmezliği":                       { articles: ["Heart failure"], query: "heart failure pathophysiology" },
+  "Hipertansiyon":                          { articles: ["Hypertension"], query: "hypertension pathophysiology diagram" },
+  "İskemik Kalp Hastalıkları":             { articles: ["Coronary artery disease", "Myocardial infarction"], query: "coronary artery disease atherosclerosis" },
+  "Kapak Hastalıkları":                    { articles: ["Valvular heart disease", "Mitral valve stenosis"], query: "heart valve anatomy pathology" },
+  "İnfektif Endokardit":                   { articles: ["Infective endocarditis"], query: "infective endocarditis vegetation pathology" },
+  "Kardiyomiyopatiler":                    { articles: ["Cardiomyopathy", "Hypertrophic cardiomyopathy"], query: "cardiomyopathy heart muscle" },
+  "Akut Miyokardit":                        { articles: ["Myocarditis"], query: "myocarditis inflammation heart" },
+  "Perikard Hastalıkları":                 { articles: ["Pericarditis", "Cardiac tamponade"], query: "pericarditis pericardial effusion" },
+  "Kardiyak Aritmiler":                    { articles: ["Cardiac arrhythmia", "Atrial fibrillation"], query: "cardiac arrhythmia ECG rhythm" },
+  "Periferik Arter Hastalıkları":          { articles: ["Peripheral artery disease"], query: "peripheral artery disease anatomy" },
+  "Kardiyak Tümörler":                     { articles: ["Cardiac tumor", "Myxoma"], query: "cardiac tumor myxoma echocardiogram" },
+  "Yaşlılarda Kalp Hastalıkları":          { articles: ["Heart failure", "Aortic stenosis"], query: "elderly heart disease aging" },
+  // Göğüs
+  "Akciğer Hastalıklarında Semptomlar":   { articles: ["Dyspnea", "Cough"], query: "lung symptoms respiratory" },
+  "Akciğer Hastalıklarında Fizik Muayene": { articles: ["Lung auscultation"], query: "chest auscultation percussion lung exam" },
+  "Solunum Hastalıklarında Tanı Yöntemleri": { articles: ["Spirometry", "Chest X-ray"], query: "spirometry lung function test" },
+  "Obstrüktif Akciğer Hastalıkları":      { articles: ["Chronic obstructive pulmonary disease", "Asthma"], query: "COPD obstructive lung disease spirometry" },
+  "Restriktif Akciğer Hastalıkları":       { articles: ["Restrictive lung disease", "Pulmonary fibrosis"], query: "restrictive lung disease fibrosis" },
+  "Mesleksel Akciğer Hastalıkları":        { articles: ["Pneumoconiosis", "Asbestosis"], query: "occupational lung disease pneumoconiosis" },
+  "Pulmoner Tromboemboli":                 { articles: ["Pulmonary embolism"], query: "pulmonary embolism pathophysiology DVT" },
+  "Pulmoner Hipertansiyon ve Kor Pulmonale": { articles: ["Pulmonary hypertension", "Cor pulmonale"], query: "pulmonary hypertension pathophysiology" },
+  "Tüberküloz":                             { articles: ["Tuberculosis"], query: "tuberculosis lung pathology granuloma" },
+  "Solunum Sisteminin Enfeksiyon Hastalıkları": { articles: ["Pneumonia", "Community-acquired pneumonia"], query: "pneumonia lung consolidation radiology" },
+  "Mantarlarla Oluşan Solunum Yolu Hastalıkları": { articles: ["Aspergillosis", "Histoplasmosis"], query: "fungal lung infection aspergillosis" },
+  "Plevra Hastalıkları":                   { articles: ["Pleural effusion", "Pneumothorax"], query: "pleural effusion pneumothorax chest" },
+  "Uyku Apne / Hipoapne Sendromu":         { articles: ["Sleep apnea", "Obstructive sleep apnea"], query: "sleep apnea polysomnography airway" },
+  "Akciğer Kanserleri":                    { articles: ["Lung cancer", "Non-small-cell lung carcinoma"], query: "lung cancer pathology radiology" },
+  "Yaşlılıkta Meydana Gelen Solunum Sistemi Değişiklikleri": { articles: ["Lung", "Aging"], query: "aging lung physiological changes" },
+  // Hematoloji
+  "Hematopoez":                            { articles: ["Haematopoiesis"], query: "hematopoiesis bone marrow diagram" },
+  "Anemiler":                              { articles: ["Anemia", "Iron-deficiency anemia"], query: "anemia blood smear peripheral film" },
+  "Hemolitik Anemiler":                    { articles: ["Hemolytic anemia", "Sickle cell disease"], query: "hemolytic anemia sickle cell blood smear" },
+  "Lökosit Hastalıkları":                  { articles: ["Leukemia", "Acute myeloid leukemia"], query: "leukemia blood smear bone marrow" },
+  "Lenfomalar":                             { articles: ["Lymphoma", "Hodgkin lymphoma"], query: "lymphoma pathology Reed Sternberg" },
+  "Miyeloproliferatif Hastalıklar":         { articles: ["Myeloproliferative neoplasm", "Polycythemia vera"], query: "myeloproliferative disease bone marrow" },
+  "Plazma Hücre Diskrazileri":             { articles: ["Multiple myeloma", "Plasma cell"], query: "multiple myeloma plasma cell pathology" },
+  "Kanama Diyatezleri ve Trombozlar":      { articles: ["Coagulation", "Thrombosis"], query: "coagulation cascade diagram bleeding" },
+  "Kan Transfüzyonu":                      { articles: ["Blood transfusion"], query: "blood transfusion ABO blood group" },
+  "Hemaferez":                             { articles: ["Apheresis"], query: "apheresis plasmapheresis blood" },
+  "Hematopoetik Kök Hücre Nakli":          { articles: ["Hematopoietic stem cell transplantation"], query: "stem cell transplant bone marrow" },
+  // Nefroloji
+  "Renal Fizyoloji ve Tübül Hastalıkları": { articles: ["Nephron", "Kidney"], query: "nephron anatomy diagram tubule" },
+  "Sıvı ve Elektrolit Dengesi ve Bozuklukları": { articles: ["Electrolyte", "Hyponatremia"], query: "fluid electrolyte balance sodium potassium" },
+  "Asit-Baz Dengesi ve Bozuklukları":      { articles: ["Acid–base homeostasis", "Metabolic acidosis"], query: "acid base balance pH diagram" },
+  "Böbrek Fonksiyonlarının Değerlendirilmesi": { articles: ["Glomerular filtration rate", "Creatinine"], query: "kidney function GFR creatinine" },
+  "Akut Böbrek Hasarı":                    { articles: ["Acute kidney injury"], query: "acute kidney injury pathophysiology ATN" },
+  "Kronik Böbrek Hastalığı":               { articles: ["Chronic kidney disease"], query: "chronic kidney disease GFR stages" },
+  "Glomerülonefritler":                    { articles: ["Glomerulonephritis", "IgA nephropathy"], query: "glomerulonephritis pathology kidney biopsy" },
+  "Sistemik Hastalıkların Böbrek Tutulumu": { articles: ["Diabetic nephropathy", "Lupus nephritis"], query: "diabetic nephropathy kidney pathology" },
+  "İnterstisyel Nefritler":                { articles: ["Interstitial nephritis"], query: "interstitial nephritis tubular inflammation" },
+  "Diğer Renal Patolojiler":               { articles: ["Polycystic kidney disease", "Kidney stone"], query: "kidney disease polycystic renal stone" },
+  // Onkoloji
+  "Genel Bilgiler":                        { articles: ["Cancer", "Oncology"], query: "cancer cell cycle hallmarks tumor biology" },
+  "Kanser Tedavisinde Kullanılan İlaçlar": { articles: ["Chemotherapy", "Targeted therapy"], query: "chemotherapy mechanism action cancer drugs" },
+  "Paraneoplastik Sendromlar":             { articles: ["Paraneoplastic syndrome"], query: "paraneoplastic syndrome cancer" },
+  "Onkolojik Aciller":                     { articles: ["Tumor lysis syndrome", "Superior vena cava syndrome"], query: "oncologic emergency tumor lysis" },
+  // Geriatri
+  "Yaşa Bağlı Fizyolojik Değişiklikler":  { articles: ["Aging", "Senescence"], query: "aging physiological changes organ" },
+  "Geriatriye Giriş":                      { articles: ["Geriatrics"], query: "geriatrics elderly assessment" },
+  "Kapsamlı Geriatrik Değerlendirme":      { articles: ["Comprehensive geriatric assessment"], query: "geriatric assessment frailty" },
+  "Malnütrisyon":                          { articles: ["Malnutrition"], query: "malnutrition nutritional assessment elderly" },
+  "Sarkopeni":                             { articles: ["Sarcopenia"], query: "sarcopenia muscle loss elderly" },
+  "Demans":                                { articles: ["Dementia", "Alzheimer's disease"], query: "dementia Alzheimer brain pathology" },
+  "Deliryum":                              { articles: ["Delirium"], query: "delirium confusion acute brain" },
+  "Depresyon":                             { articles: ["Major depressive disorder"], query: "depression neuroscience brain" },
+  "Üriner İnkontinans":                    { articles: ["Urinary incontinence"], query: "urinary incontinence bladder anatomy" },
+  "Polifarmasi":                           { articles: ["Polypharmacy"], query: "polypharmacy drug interaction elderly" },
+  "Bası Yaraları":                         { articles: ["Pressure ulcer"], query: "pressure ulcer wound staging" },
+  "Düşme":                                 { articles: ["Falls in older adults"], query: "falls elderly risk assessment" },
+  "Senkop":                                { articles: ["Syncope (medicine)"], query: "syncope pathophysiology diagnosis" },
+  "Ortostatik Hipotansiyon":               { articles: ["Orthostatic hypotension"], query: "orthostatic hypotension blood pressure" },
+  "Kırılganlık":                           { articles: ["Frailty syndrome"], query: "frailty elderly phenotype" },
+  "Geriatride Sistemik Hastalıklar":       { articles: ["Geriatrics"], query: "geriatric systemic disease elderly" },
+  // Endokrinoloji
+  "Hipotalamo-Hipofizer Hormonlar":        { articles: ["Hypothalamic–pituitary–adrenal axis", "Pituitary gland"], query: "hypothalamic pituitary axis hormones" },
+  "Hipotalamus ve Hipofiz Hastalıkları":   { articles: ["Pituitary adenoma", "Hypopituitarism"], query: "pituitary gland disease adenoma" },
+  "Tiroid Hormonları ve Hastalıkları":     { articles: ["Thyroid", "Hypothyroidism", "Hyperthyroidism"], query: "thyroid gland disease pathology" },
+  "Paratroid Hastalıkları ve Kalsiyum":    { articles: ["Hyperparathyroidism", "Parathyroid gland"], query: "parathyroid calcium metabolism" },
+  "Metabolizmaz":                          { articles: ["Metabolic syndrome"], query: "metabolic syndrome obesity insulin" },
+  "Metabolik Kemik Hastalıkları":          { articles: ["Osteoporosis", "Paget's disease of bone"], query: "osteoporosis bone density pathology" },
+  "Diabetes Mellitus":                     { articles: ["Diabetes mellitus", "Diabetes mellitus type 2"], query: "diabetes mellitus pathophysiology insulin" },
+  "Adrenal Bez Hastalıkları":             { articles: ["Addison's disease", "Cushing's syndrome", "Adrenal gland"], query: "adrenal gland disease cortisol" },
+  "Diğer Endokrin Hastalıkları":           { articles: ["Multiple endocrine neoplasia", "Carcinoid tumor"], query: "endocrine neoplasia tumor" },
+  // Romatoloji
+  "Romatolojiye Giriş":                    { articles: ["Rheumatology"], query: "rheumatology joint inflammation autoimmune" },
+  "Vaskülitler":                           { articles: ["Vasculitis"], query: "vasculitis pathology blood vessel inflammation" },
+  "Romatoid Artrit":                       { articles: ["Rheumatoid arthritis"], query: "rheumatoid arthritis joint pathology" },
+  "Sistemik Lupus Eritematozus":           { articles: ["Systemic lupus erythematosus"], query: "lupus erythematosus butterfly rash ANA" },
+  "Seronegâtif Spondilоartropatiler":      { articles: ["Spondyloarthropathy", "Ankylosing spondylitis"], query: "ankylosing spondylitis spine bamboo" },
+  "Diğer Bağ Doku Hastalıkları":          { articles: ["Sjögren syndrome", "Systemic sclerosis"], query: "connective tissue disease scleroderma" },
+  "Diğer Artritler":                       { articles: ["Gout", "Pseudogout"], query: "gout uric acid crystal arthritis" },
+  // Hepatoloji
+  "Karaciğer Testleri ve Hiperbilirubinemiler": { articles: ["Liver function tests", "Jaundice"], query: "liver function tests bilirubin jaundice" },
+  "Akut ve Kronik Viral Hepatitler":       { articles: ["Hepatitis B", "Hepatitis C", "Hepatitis"], query: "viral hepatitis liver pathology" },
+  "Metabolik, Toksik ve İmmünolojik Karaciğer Hastalıkları": { articles: ["Non-alcoholic fatty liver disease", "Autoimmune hepatitis"], query: "fatty liver NASH alcoholic hepatitis" },
+  "Karaciğer Sirozu ve Komplikasyonları": { articles: ["Liver cirrhosis", "Portal hypertension"], query: "liver cirrhosis portal hypertension complications" },
+  "Diğer Karaciğer Hastalıkları":          { articles: ["Hepatocellular carcinoma", "Wilson's disease"], query: "liver disease hepatocellular carcinoma" },
+  // Gastroenteroloji
+  "Özofagus Hastalıkları":                 { articles: ["Gastroesophageal reflux disease", "Esophageal cancer"], query: "esophagus disease GERD pathology" },
+  "Mide Hastalıkları":                     { articles: ["Peptic ulcer disease", "Gastritis"], query: "peptic ulcer gastritis H pylori" },
+  "İnce Barsak Hastalıkları":             { articles: ["Crohn's disease", "Coeliac disease"], query: "small bowel Crohn celiac disease" },
+  "İnflamatuvar Barsak Hastalıkları":      { articles: ["Inflammatory bowel disease", "Ulcerative colitis"], query: "inflammatory bowel disease colitis Crohn" },
+  "Kolorektal Hastalıklar":                { articles: ["Colorectal cancer", "Diverticular disease"], query: "colorectal cancer colon pathology" },
+  "Pankreatit ve Pankreas Hastalıkları":   { articles: ["Pancreatitis", "Pancreatic cancer"], query: "pancreatitis pancreas anatomy pathology" },
+  "Akut Batın Hastalıkları":               { articles: ["Acute abdomen", "Appendicitis"], query: "acute abdomen appendicitis surgical" },
+  // Enfeksiyon
+  "Antibiyotikler":                        { articles: ["Antibiotic", "Beta-lactam antibiotic"], query: "antibiotic mechanism action bacteria" },
+  "Ateş":                                  { articles: ["Fever", "Fever of unknown origin"], query: "fever pathophysiology thermoregulation" },
+  "Sepsisler":                             { articles: ["Sepsis"], query: "sepsis pathophysiology inflammatory" },
+  "HIV Enfeksiyonu":                       { articles: ["HIV/AIDS", "HIV"], query: "HIV AIDS pathophysiology CD4 cells" },
+  "Tropikal Hastalıklar":                  { articles: ["Malaria", "Dengue fever"], query: "tropical disease malaria dengue" },
+  "Parazit Hastalıkları":                  { articles: ["Parasitic disease"], query: "parasitic disease helminth protozoa" },
+  "Fırsatçı Enfeksiyonlar":               { articles: ["Opportunistic infection", "Pneumocystis pneumonia"], query: "opportunistic infection immunocompromised" },
+  "Viral Hepatitler":                      { articles: ["Hepatitis A", "Hepatitis E"], query: "viral hepatitis liver virus" },
+};
+
+/* ── Category fallback when topic not mapped ─────────────────── */
+const CAT_FALLBACK: Record<string, TopicMedia> = {
+  "Kardiyoloji":         { articles: ["Heart"], query: "cardiology heart anatomy" },
+  "Göğüs Hastalıkları": { articles: ["Lung"], query: "lung pulmonology anatomy" },
+  "Hematoloji":          { articles: ["Haematopoiesis"], query: "hematology blood cells bone marrow" },
+  "Nefroloji":           { articles: ["Kidney", "Nephron"], query: "kidney nephron anatomy" },
+  "Onkoloji":            { articles: ["Cancer"], query: "oncology tumor cancer cell" },
+  "Geriatri":            { articles: ["Geriatrics"], query: "geriatrics elderly aging" },
+  "Endokrinoloji":       { articles: ["Endocrine system"], query: "endocrine system hormones gland" },
+  "Romatoloji":          { articles: ["Rheumatoid arthritis"], query: "rheumatology joint autoimmune" },
+  "Hepatoloji":          { articles: ["Liver"], query: "liver anatomy hepatology" },
+  "Gastroenteroloji":    { articles: ["Gastrointestinal tract"], query: "gastrointestinal anatomy diagram" },
+  "Enfeksiyon Hastalıkları": { articles: ["Infection"], query: "infectious disease pathogen immunity" },
+};
+
+/* ── Public API ─────────────────────────────────────────────── */
+
+/** Fetch up to 2 Wikipedia images for a note topic */
+export async function generateNoteImages(cat: string, topic: string): Promise<NoteImage[]> {
+  const media = TOPIC_MAP[topic] ?? CAT_FALLBACK[cat];
+  if (!media) return [];
+
+  const results: NoteImage[] = [];
+
+  // Try Wikipedia article thumbnails first
+  for (const article of media.articles) {
+    if (results.length >= 2) break;
+    const img = await fetchWikiImage(article);
+    if (img) results.push(img);
+  }
+
+  // Commons search fallback
+  if (results.length < 1) {
+    const img = await searchCommonsImage(media.query);
+    if (img) results.push(img);
+  }
+
+  return results;
+}
+
+/** Return a single Wikipedia image URL for a quiz question */
+export async function getQuizImage(cat: string, tags: string[]): Promise<NoteImage | null> {
+  const topic = tags?.[0] || "";
+  const media = TOPIC_MAP[topic] ?? TOPIC_MAP[cat] ?? CAT_FALLBACK[cat];
+  if (!media) return null;
+
+  const article = media.articles[0];
+  const img = await fetchWikiImage(article);
+  if (img) return img;
+  return searchCommonsImage(media.query);
+}
+
+/** Build img-grid HTML for embedding in note innerHTML */
 export function buildImageHtml(images: NoteImage[]): string {
   if (!images.length) return "";
   return `<div class="note-images-grid">${images
@@ -184,7 +262,7 @@ export function buildImageHtml(images: NoteImage[]): string {
       (img) =>
         `<figure class="note-image-figure">
           <img src="${img.url}" alt="${img.caption}" class="note-image" loading="lazy" />
-          <figcaption class="note-image-caption">${img.caption}</figcaption>
+          <figcaption class="note-image-caption">📖 ${img.caption} — Wikipedia / Wikimedia Commons</figcaption>
         </figure>`
     )
     .join("")}</div>`;
