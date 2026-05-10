@@ -245,10 +245,10 @@ export default function Dashboard() {
         >
           <div>
             <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.1rem", fontWeight: 700, color: "var(--cream)" }}>
-              Sınırsız erişim için Pro'ya geç 🚀
+              Apex Pro ile tam potansiyelini aç
             </div>
             <div style={{ fontSize: ".78rem", color: "var(--t2)", marginTop: 4 }}>
-              Sınırsız quiz · Tüm konu notları · AI açıklamalar · Çalışma planı
+              Sınırsız soru · Tüm konu notları · Klinik Analizler · Kişisel Çalışma Planı
             </div>
           </div>
           <button className="btn btn-primary" onClick={() => setCurrentPage("pricing")}>

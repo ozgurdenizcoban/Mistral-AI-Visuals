@@ -255,20 +255,36 @@ body {
 .nb .mnem { background: rgba(167,139,250,.08); border: 1px solid rgba(167,139,250,.18); border-left: 3px solid var(--purple); border-radius: 8px; padding: 11px 15px; margin: 8px 0; color: var(--purple); font-size: .8rem; }
 .nb .score-box { background: var(--ink3); border: 1px solid var(--line2); border-radius: 8px; padding: 12px 15px; margin: 8px 0; }
 .nb .score-title { font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
-
-/* ===== NOTE IMAGES ===== */
-.note-images-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px; margin: 20px 0;
+.nb .flowchart {
+  background: rgba(167,139,250,.06); border: 1px solid rgba(167,139,250,.2);
+  border-left: 3px solid var(--purple); border-radius: 8px;
+  padding: 13px 16px; margin: 10px 0; color: var(--t2); font-size: .8rem;
+  font-family: "JetBrains Mono", monospace; line-height: 2; white-space: pre-wrap;
+  word-break: break-word;
 }
-.note-image-figure { display: flex; flex-direction: column; gap: 8px; }
+.nb .flowchart strong { color: var(--purple); font-family: "Syne", sans-serif; font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; display: block; margin-bottom: 6px; }
+
+/* ===== NOTE IMAGES — clinical figure style ===== */
+.note-images-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px; margin: 4px 0 24px;
+}
+.note-image-figure {
+  display: flex; flex-direction: column; gap: 0;
+  border: 1px solid var(--line2); border-radius: 12px; overflow: hidden;
+  background: var(--ink3); box-shadow: 0 4px 18px rgba(0,0,0,.28);
+}
 .note-image {
-  width: 100%; border-radius: 10px; border: 1px solid var(--line);
-  object-fit: cover; max-height: 260px; background: var(--ink3);
+  width: 100%; border-radius: 0;
+  object-fit: cover; max-height: 220px; background: var(--ink3);
+  display: block;
 }
 .note-image-caption {
-  font-size: .72rem; color: var(--t2); text-align: center;
-  font-style: italic; font-family: "Syne", sans-serif;
+  font-size: .69rem; color: var(--t2);
+  padding: 8px 13px; line-height: 1.5;
+  font-family: "Syne", sans-serif;
+  border-top: 1px solid var(--line);
+  background: rgba(255,255,255,.02);
 }
 
 /* ===== WIKI IMAGE LOADING (Notes) ===== */
@@ -281,26 +297,40 @@ body {
 }
 .wiki-img-loading-icon { font-size: 1.2rem; opacity: .6; }
 
-/* ===== QUIZ IMAGES ===== */
-.quiz-img-wrap {
-  margin: 14px 0 0 0; border-radius: 10px; overflow: hidden;
-  border: 1px solid var(--line); background: var(--ink3);
-}
-.quiz-img-skeleton {
-  display: flex; align-items: center; gap: 10px;
-  padding: 18px 20px; color: var(--t2); font-size: .78rem;
-  font-family: "Syne", sans-serif;
-}
-.quiz-img-skeleton-icon { font-size: 1.4rem; opacity: .5; }
-.quiz-img-skeleton-txt { color: var(--t3); }
-.quiz-img {
-  width: 100%; max-height: 240px; object-fit: cover;
-  display: block;
-}
-.quiz-img-caption {
-  padding: 8px 14px; font-size: .7rem; color: var(--t2);
-  font-family: "Syne", sans-serif; border-top: 1px solid var(--line);
+/* ===== QUIZ CLINICAL REFERENCE IMAGE ===== */
+.quiz-clinical-img {
+  float: right;
+  margin: 0 0 14px 18px;
+  width: 176px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line2);
   background: var(--ink3);
+  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+}
+.quiz-clinical-img img {
+  width: 100%;
+  display: block;
+  max-height: 168px;
+  object-fit: cover;
+}
+.quiz-clinical-cap {
+  font-size: .62rem;
+  color: var(--t3);
+  padding: 6px 9px;
+  text-align: center;
+  line-height: 1.45;
+  font-family: "Syne", sans-serif;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 600px) {
+  .quiz-clinical-img {
+    float: none;
+    width: 100%;
+    margin: 0 0 14px 0;
+  }
+  .quiz-clinical-img img { max-height: 200px; }
 }
 
 /* ===== PROGRESS BAR ===== */

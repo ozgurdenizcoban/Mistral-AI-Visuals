@@ -243,15 +243,18 @@ export async function generateNoteImages(cat: string, topic: string): Promise<No
   return results;
 }
 
-/** Return a single Wikipedia image URL for a quiz question */
-export async function getQuizImage(cat: string, tags: string[]): Promise<NoteImage | null> {
+/** Return a single Wikipedia image for a quiz question topic.
+ *  Only returns an image if the topic is explicitly in TOPIC_MAP — no generic fallbacks. */
+export async function getQuizImage(tags: string[]): Promise<NoteImage | null> {
   const topic = tags?.[0] || "";
-  const media = TOPIC_MAP[topic] ?? TOPIC_MAP[cat] ?? CAT_FALLBACK[cat];
+  const media = TOPIC_MAP[topic];
   if (!media) return null;
 
-  const article = media.articles[0];
-  const img = await fetchWikiImage(article);
-  if (img) return img;
+  // Try up to 2 articles for the best result
+  for (const article of media.articles.slice(0, 2)) {
+    const img = await fetchWikiImage(article);
+    if (img) return img;
+  }
   return searchCommonsImage(media.query);
 }
 

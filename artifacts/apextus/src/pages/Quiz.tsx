@@ -4,11 +4,14 @@ import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri, FREE_LIMITS } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
 import { qFingerprint, toDay, prevDay } from "@/lib/utils";
+import { getQuizImage, NoteImage } from "@/lib/imageGen";
 import { toast } from "sonner";
 
 interface Q extends QuizQuestion {
   _fid?: string;
 }
+
+type ImgState = NoteImage | null | "loading";
 
 export default function Quiz() {
   const { state, saveState, isPro, checkLimit, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
@@ -34,6 +37,9 @@ export default function Quiz() {
   const [aiExp, setAiExp] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
+  // Per-question image state (only for mapped topics)
+  const [qImages, setQImages] = useState<Record<number, ImgState>>({});
+
   // Refs to always have fresh values inside async callbacks
   const currentRef = useRef(current);
   const selectedRef = useRef(selected);
@@ -41,6 +47,18 @@ export default function Quiz() {
   useEffect(() => { currentRef.current = current; }, [current]);
   useEffect(() => { selectedRef.current = selected; }, [selected]);
   useEffect(() => { questionsRef.current = questions; }, [questions]);
+
+  // Load image selectively — only when topic is in TOPIC_MAP
+  useEffect(() => {
+    if (phase !== "quiz" || !questions[current]) return;
+    if (qImages[current] !== undefined) return; // already fetched or loading
+
+    const q = questions[current];
+    setQImages((prev) => ({ ...prev, [current]: "loading" }));
+    getQuizImage(q.tags || [])
+      .then((img) => setQImages((prev) => ({ ...prev, [current]: img })))
+      .catch(() => setQImages((prev) => ({ ...prev, [current]: null })));
+  }, [current, phase, questions]);
 
   useEffect(() => {
     if (quizTarget) {
@@ -80,6 +98,7 @@ export default function Quiz() {
     setSelected(null);
     setAnswered(false);
     setAiExp(null);
+    setQImages({});
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
@@ -205,12 +224,11 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
 
   async function fetchAIExplain() {
     if (!checkLimit("aiExplain")) {
-      toast.error("AI açıklama hakkın bitti. Pro'ya geç!");
+      toast.error("Klinik analiz hakkın doldu. Pro'ya geç!");
       setCurrentPage("pricing");
       return;
     }
 
-    // Use refs so we always get the question/answer that was shown when button was clicked
     const idx = currentRef.current;
     const sel = selectedRef.current;
     const q = questionsRef.current[idx];
@@ -221,7 +239,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
     try {
       let cached = await fbGetAnalysis(fp);
       if (!cached) {
-        const prompt = `TUS sınavı sorusu için detaylı açıklama yaz (Türkçe).
+        const prompt = `TUS sınavı sorusu için detaylı klinik açıklama yaz (Türkçe).
 
 VAKA: ${q.vaka}
 SORU: ${q.soru}
@@ -229,7 +247,7 @@ SEÇENEKLER: ${q.opts.map((o, i) => `${["A","B","C","D","E"][i]}) ${o}`).join(" 
 DOĞRU CEVAP: ${["A","B","C","D","E"][q.ans]}) ${q.opts[q.ans]}
 ÖĞRENCİNİN CEVABI: ${sel !== null && sel >= 0 ? `${["A","B","C","D","E"][sel]}) ${q.opts[sel]}` : "Boş (süre doldu)"}
 
-Açıklama yaz:
+Klinik açıklama:
 1. Neden doğru cevap doğru (mekanizma, patofizyoloji)
 2. Diğer seçenekler neden yanlış (kısa)
 3. TUS SPOT: Bu sorudan çıkarılacak kritik bilgi
@@ -240,7 +258,6 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
         fbSaveAnalysis(fp, cached).catch(() => {});
       }
 
-      // Only set if user is still on the same question
       if (currentRef.current === idx) {
         setAiExp(cached);
         if (!isPro()) {
@@ -248,13 +265,13 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
         }
       }
     } catch (e) {
-      toast.error("AI açıklama alınamadı: " + (e as Error).message);
+      toast.error("Analiz yüklenemedi: " + (e as Error).message);
     } finally {
       setAiLoading(false);
     }
   }
 
-  /* ─── SETUP SCREEN ─────────────────────────────────── */
+  /* ─── SETUP ─────────────────────────────────────────── */
   if (phase === "setup") {
     const categories = [...TREE.map((b) => b.cat), "Karışık"];
     const topicsOfCat = TREE.find((b) => b.cat === cat)?.topics || [];
@@ -262,8 +279,8 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
     return (
       <div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>AI Quiz</div>
-          <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>Mistral AI tarafından üretilen TUS tarzı klinik vakalar</div>
+          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>Klinik Quiz</div>
+          <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>TUS tarzı klinik vaka soruları — performansına göre kişiselleştirilmiş</div>
         </div>
 
         {!isPro() && (
@@ -334,7 +351,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
       <div className="loading-screen">
         <div className="loading-orb">✦</div>
         <div className="loading-title">Sorular hazırlanıyor</div>
-        <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>Mistral AI klinik vakalar oluşturuyor<span className="loading-dots" /></div>
+        <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>Klinik vakalar oluşturuluyor<span className="loading-dots" /></div>
       </div>
     );
   }
@@ -343,12 +360,12 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
   if (phase === "result") {
     const pct = Math.round((score / questions.length) * 100);
     const emoji = pct >= 80 ? "🏆" : pct >= 60 ? "✅" : pct >= 40 ? "📈" : "💪";
-    const msg = pct >= 80 ? "Muhteşem!" : pct >= 60 ? "İyi iş!" : pct >= 40 ? "Gelişiyor!" : "Devam et!";
+    const msg = pct >= 80 ? "Mükemmel performans!" : pct >= 60 ? "Güçlü skor!" : pct >= 40 ? "Gelişme gösteriyor!" : "Devam et, başaracaksın!";
     return (
       <div className="rw">
         <div className="re">{emoji}</div>
-        <div className="rs" style={{ color: pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--gold)" : "var(--ac)" }}>{pct}%</div>
-        <div style={{ fontSize: ".82rem", color: "var(--t2)", marginBottom: 20 }}>{msg} {score}/{questions.length} doğru</div>
+        <div className="rs" style={{ color: pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--teal)" : "var(--ac)" }}>{pct}%</div>
+        <div style={{ fontSize: ".82rem", color: "var(--t2)", marginBottom: 20 }}>{msg} — {score}/{questions.length} doğru</div>
 
         <div className="rg">
           <div className="rst"><div className="rv" style={{ color: "var(--green)" }}>{score}</div><div className="rl2">Doğru</div></div>
@@ -359,7 +376,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
         {wrongList.length > 0 && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--ac)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, textAlign: "left" }}>
-              Yanlış Cevaplar
+              Tekrar Edilmesi Gereken Konular
             </div>
             {wrongList.map(({ q }, i) => (
               <div key={i} style={{ background: "var(--rd)", border: "1px solid rgba(232,83,74,.2)", borderRadius: 9, padding: "12px 14px", marginBottom: 8, textAlign: "left" }}>
@@ -372,7 +389,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
         )}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-          <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); }}>✦ Yeni Quiz</button>
+          <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); setQImages({}); }}>✦ Yeni Quiz</button>
           <button className="btn btn-ghost" onClick={() => setCurrentPage("stats")}>📊 İstatistikler</button>
         </div>
       </div>
@@ -383,10 +400,11 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
   const q = questions[current];
   if (!q) return null;
   const opts = ["A", "B", "C", "D", "E"];
+  const imgState = qImages[current];
 
   return (
-    <div style={{ maxWidth: 680, margin: "0 auto" }}>
-      {/* Progress bar */}
+    <div style={{ maxWidth: 700, margin: "0 auto" }}>
+      {/* Progress */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase" }}>{current + 1} / {questions.length}</span>
@@ -410,13 +428,40 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
       {/* Question card */}
       <div className="vc">
         <div className="vhdr">
-          <span className="vlbl">Klinik Vaka — TUS Tarzı</span>
+          <span className="vlbl">Klinik Vaka — TUS Formatı</span>
+          {/* Image loading indicator subtle badge */}
+          {imgState === "loading" && (
+            <span style={{ fontSize: ".6rem", color: "var(--t3)", display: "flex", alignItems: "center", gap: 4 }}>
+              <span className="spin" style={{ width: 8, height: 8, borderWidth: 1.5 }} />
+              görsel
+            </span>
+          )}
         </div>
+
+        {/* Clinical reference image — right-floated on desktop, full-width on mobile */}
+        {imgState && imgState !== "loading" && (
+          <div className="quiz-clinical-img">
+            <img
+              src={imgState.url}
+              alt={imgState.caption}
+              onError={(e) => {
+                const el = (e.currentTarget as HTMLImageElement).closest<HTMLDivElement>(".quiz-clinical-img");
+                if (el) el.style.display = "none";
+              }}
+            />
+            <div className="quiz-clinical-cap">
+              {imgState.caption}
+              <span style={{ opacity: .55, display: "block" }}>Wikipedia / Wikimedia Commons</span>
+            </div>
+          </div>
+        )}
+
         <div className="vbody">
           <div className="vnum">{current + 1}</div>
           <div className="vq">{q.vaka}</div>
           <div className="vsoru">{q.soru}</div>
         </div>
+        <div style={{ clear: "both" }} />
       </div>
 
       {/* Options */}
@@ -449,11 +494,11 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
         </div>
       )}
 
-      {/* AI deep explanation — on demand only */}
+      {/* Klinik Analiz — on demand */}
       {answered && (
         <div className="ai-box" style={{ marginBottom: 14 }}>
           <div className={`ai-box-header${aiLoading ? " pulsing" : ""}`}>
-            ✦ Detaylı AI Açıklama
+            ✦ Klinik Analiz
             {!aiExp && !aiLoading && (
               <button className="btn btn-teal sm" style={{ marginLeft: "auto" }} onClick={fetchAIExplain}>
                 Analiz Et
@@ -462,7 +507,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
           </div>
           {aiLoading && (
             <div style={{ color: "var(--t2)", fontSize: ".8rem", padding: "6px 0" }}>
-              Mistral analiz yapıyor<span className="loading-dots" />
+              Klinik analiz hazırlanıyor<span className="loading-dots" />
             </div>
           )}
           {aiExp && <div className="nb" dangerouslySetInnerHTML={{ __html: aiExp }} />}

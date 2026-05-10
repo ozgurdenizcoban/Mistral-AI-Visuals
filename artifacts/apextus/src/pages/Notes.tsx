@@ -253,7 +253,7 @@ export default function Notes() {
                     <span className="tag tag-red">{activeTopic.cat}</span>
                     <span className="tag tag-teal">TUS Odaklı</span>
                     <span className="tag tag-purple">🔗 Bağlantı Haritası</span>
-                    {(noteLoading || imagesLoading) && <span className="tag tag-gold">{noteLoading ? "AI üretiyor..." : "🖼 Görseller yükleniyor..."}</span>}
+                    {(noteLoading || imagesLoading) && <span className="tag tag-gold">{noteLoading ? "Hazırlanıyor..." : "🔬 Klinik görseller yükleniyor..."}</span>}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
@@ -295,7 +295,7 @@ export default function Notes() {
                 {imagesLoading && (
                   <div className="wiki-img-loading">
                     <span className="wiki-img-loading-icon">🔬</span>
-                    <span>Wikipedia'dan eğitici görseller yükleniyor<span className="loading-dots" /></span>
+                    <span>Klinik referans görseller yükleniyor<span className="loading-dots" /></span>
                   </div>
                 )}
                 {noteImages.length > 0 && (
@@ -310,7 +310,7 @@ export default function Notes() {
                           onError={(e) => { (e.currentTarget as HTMLImageElement).closest("figure")!.style.display = "none"; }}
                         />
                         <figcaption className="note-image-caption">
-                          📖 {img.caption} — <em>Wikipedia / Wikimedia Commons</em>
+                          {img.caption} <span style={{ opacity: .6 }}>— Wikipedia / Wikimedia Commons</span>
                         </figcaption>
                       </figure>
                     ))}
@@ -353,9 +353,12 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - <ul><li>madde</li></ul> | <table> tablolar için
 - <div class="tip"><strong>TUS SPOT:</strong> ...</div>
 - <div class="warn"><strong>DİKKAT:</strong> ...</div>
-- <div class="algo"><strong>ALGORİTMA:</strong> ...</div>
+- <div class="algo"><strong>ALGORİTMA:</strong> Adım 1 → Adım 2 → Adım 3 (tanı/tedavi akış diyagramı)</div>
+- <div class="flowchart"><strong>KARAR AĞACI:</strong><br/>⬤ Başlangıç koşulu<br/>├─ [EVET] → sonuç<br/>└─ [HAYIR] → alternatif</div>
 - <div class="mnem"><strong>🧠 MNEM:</strong> ...</div>
 - <div class="score-box"><div class="score-title">SKOR</div>...</div>
+
+DİYAGRAM KURALI: Her konuda en az 1 adet tanı veya tedavi algoritması diyagramı (.algo veya .flowchart) yaz.
 
 ZORUNLU BÖLÜMLER:
 <h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>

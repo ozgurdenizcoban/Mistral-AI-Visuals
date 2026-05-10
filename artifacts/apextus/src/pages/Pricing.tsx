@@ -38,7 +38,7 @@ export default function Pricing() {
           TUS'ta Zirveye Ulaş
         </div>
         <div style={{ color: "var(--t2)", fontSize: ".86rem", marginTop: 8 }}>
-          AI destekli sınav hazırlığı — sınırsız sorularla, akıllı tekrar planıyla
+          Klinik zeka, kişisel tekrar planı ve sınırsız sorularla TUS'a hazırlan
         </div>
       </div>
 

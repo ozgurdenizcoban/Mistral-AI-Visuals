@@ -5,7 +5,7 @@ import { TREE } from "@/lib/data";
 
 const NAV_ITEMS = [
   { id: "dashboard", icon: "⊞", label: "Ana Sayfa" },
-  { id: "quiz", icon: "📋", label: "AI Quiz" },
+  { id: "quiz", icon: "📋", label: "Klinik Quiz" },
   { id: "notes", icon: "📚", label: "Konu Notları" },
   { id: "review", icon: "⏰", label: "Tekrar Planı" },
   { id: "stats", icon: "📊", label: "İstatistikler" },

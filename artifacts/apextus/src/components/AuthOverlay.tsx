@@ -111,7 +111,7 @@ export default function AuthOverlay() {
             TUS Zirvesi
           </div>
           <div style={{ fontSize: ".78rem", color: "var(--t2)", marginTop: 8, lineHeight: 1.6 }}>
-            AI destekli TUS çalışma platformu
+            Türkiye'nin klinik TUS hazırlık platformu
           </div>
         </div>
 
