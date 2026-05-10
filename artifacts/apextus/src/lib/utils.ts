@@ -26,11 +26,16 @@ export function addDays(n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function qFingerprint(q: { soru?: string }): string {
-  const s = (q.soru || "").substring(0, 60).replace(/\s+/g, "");
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (h << 5) - h + s.charCodeAt(i);
+export function qFingerprint(q: { vaka?: string; soru?: string; opts?: string[] }): string {
+  // Use vaka + soru + first option to avoid collisions between similarly-worded questions
+  const raw = [
+    (q.vaka || "").substring(0, 80),
+    (q.soru || "").substring(0, 60),
+    (q.opts?.[0] || "").substring(0, 30),
+  ].join("|").replace(/\s+/g, "");
+  let h = 5381;
+  for (let i = 0; i < raw.length; i++) {
+    h = ((h << 5) + h) ^ raw.charCodeAt(i);
     h |= 0;
   }
   return "q" + Math.abs(h).toString(36);

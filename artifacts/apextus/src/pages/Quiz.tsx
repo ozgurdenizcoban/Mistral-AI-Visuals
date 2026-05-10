@@ -3,7 +3,6 @@ import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri, FREE_LIMITS } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
-import { getQuizImage, NoteImage } from "@/lib/imageGen";
 import { qFingerprint, toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -35,9 +34,13 @@ export default function Quiz() {
   const [aiExp, setAiExp] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Async Wikipedia image per question (keyed by index)
-  const [qImages, setQImages] = useState<Record<number, NoteImage | null>>({});
-  const [qImgLoading, setQImgLoading] = useState<Record<number, boolean>>({});
+  // Refs to always have fresh values inside async callbacks
+  const currentRef = useRef(current);
+  const selectedRef = useRef(selected);
+  const questionsRef = useRef(questions);
+  useEffect(() => { currentRef.current = current; }, [current]);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+  useEffect(() => { questionsRef.current = questions; }, [questions]);
 
   useEffect(() => {
     if (quizTarget) {
@@ -46,24 +49,6 @@ export default function Quiz() {
       setQuizTarget(null);
     }
   }, [quizTarget, setQuizTarget]);
-
-  // Load Wikipedia image for the current question
-  useEffect(() => {
-    if (phase !== "quiz" || !questions[current]) return;
-    if (qImages[current] !== undefined) return; // already loaded or null
-
-    const q = questions[current];
-    setQImgLoading((prev) => ({ ...prev, [current]: true }));
-    setQImages((prev) => ({ ...prev, [current]: undefined as unknown as null })); // mark as loading
-
-    getQuizImage(q.cat || cat, q.tags || []).then((img) => {
-      setQImages((prev) => ({ ...prev, [current]: img }));
-      setQImgLoading((prev) => ({ ...prev, [current]: false }));
-    }).catch(() => {
-      setQImages((prev) => ({ ...prev, [current]: null }));
-      setQImgLoading((prev) => ({ ...prev, [current]: false }));
-    });
-  }, [phase, current, questions]);
 
   function stopTimer() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -95,8 +80,6 @@ export default function Quiz() {
     setSelected(null);
     setAnswered(false);
     setAiExp(null);
-    setQImages({});
-    setQImgLoading({});
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
@@ -195,11 +178,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
     if (correct) newState.byCat[catKey].c += 1;
 
     if (newState.lastDate !== today) {
-      if (newState.lastDate === prevDay()) {
-        newState.streak = (newState.streak || 0) + 1;
-      } else {
-        newState.streak = 1;
-      }
+      newState.streak = (newState.lastDate === prevDay()) ? (newState.streak || 0) + 1 : 1;
       newState.lastDate = today;
     }
     saveState(newState);
@@ -216,11 +195,10 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
 
   function finishQuiz() {
     const pct = Math.round((score / questions.length) * 100);
-    const newState = { ...state };
     const today = new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const newState = { ...state };
     newState.sessions = [...(newState.sessions || []), { date: today, cat, c: score, t: questions.length, p: pct }];
     if (newState.sessions.length > 50) newState.sessions = newState.sessions.slice(-50);
-    if (!isPro()) newState.noteCount = newState.noteCount || 0;
     saveState(newState);
     setPhase("result");
   }
@@ -231,7 +209,13 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
       setCurrentPage("pricing");
       return;
     }
-    const q = questions[current];
+
+    // Use refs so we always get the question/answer that was shown when button was clicked
+    const idx = currentRef.current;
+    const sel = selectedRef.current;
+    const q = questionsRef.current[idx];
+    if (!q) return;
+
     const fp = qFingerprint(q);
     setAiLoading(true);
     try {
@@ -243,17 +227,25 @@ VAKA: ${q.vaka}
 SORU: ${q.soru}
 SEÇENEKLER: ${q.opts.map((o, i) => `${["A","B","C","D","E"][i]}) ${o}`).join(" | ")}
 DOĞRU CEVAP: ${["A","B","C","D","E"][q.ans]}) ${q.opts[q.ans]}
-ÖĞRENCİNİN CEVABI: ${selected !== null && selected >= 0 ? `${["A","B","C","D","E"][selected]}) ${q.opts[selected]}` : "Boş"}
+ÖĞRENCİNİN CEVABI: ${sel !== null && sel >= 0 ? `${["A","B","C","D","E"][sel]}) ${q.opts[sel]}` : "Boş (süre doldu)"}
 
-Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS spotları. Sadece HTML döndür (h3, p, ul, .tip, .warn formatları kullan):`;
-        cached = await mistralText(prompt, 2500, 0.4);
+Açıklama yaz:
+1. Neden doğru cevap doğru (mekanizma, patofizyoloji)
+2. Diğer seçenekler neden yanlış (kısa)
+3. TUS SPOT: Bu sorudan çıkarılacak kritik bilgi
+
+Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
+        cached = await mistralText(prompt, 2500, 0.35);
         cached = cached.replace(/^```(?:html)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
         fbSaveAnalysis(fp, cached).catch(() => {});
       }
-      setAiExp(cached);
-      if (!isPro()) {
-        const ns = { ...state, aiExplainCount: (state.aiExplainCount || 0) + 1 };
-        saveState(ns);
+
+      // Only set if user is still on the same question
+      if (currentRef.current === idx) {
+        setAiExp(cached);
+        if (!isPro()) {
+          saveState({ ...state, aiExplainCount: (state.aiExplainCount || 0) + 1 });
+        }
       }
     } catch (e) {
       toast.error("AI açıklama alınamadı: " + (e as Error).message);
@@ -262,18 +254,16 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
     }
   }
 
+  /* ─── SETUP SCREEN ─────────────────────────────────── */
   if (phase === "setup") {
     const categories = [...TREE.map((b) => b.cat), "Karışık"];
-    const selectedBranch = TREE.find((b) => b.cat === cat);
-    const topicsOfCat = selectedBranch?.topics || [];
+    const topicsOfCat = TREE.find((b) => b.cat === cat)?.topics || [];
 
     return (
       <div>
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>AI Quiz</div>
-          <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>
-            Mistral AI klinik vakalar · Wikipedia/Wikimedia Commons eğitici görseller
-          </div>
+          <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>Mistral AI tarafından üretilen TUS tarzı klinik vakalar</div>
         </div>
 
         {!isPro() && (
@@ -306,7 +296,8 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
               <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>Soru Sayısı</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {[5, 10, 15, 20].map((n) => (
-                  <button key={n} onClick={() => setCount(n)} style={{ flex: 1, padding: "8px 4px", borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontFamily: "Syne, sans-serif", fontSize: ".82rem", fontWeight: 700, background: count === n ? "var(--ac)" : "var(--ink3)", borderColor: count === n ? "var(--ac)" : "var(--line)", color: count === n ? "#fff" : "var(--t2)" }}>
+                  <button key={n} onClick={() => setCount(n)}
+                    style={{ flex: 1, padding: "8px 4px", borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontFamily: "Syne, sans-serif", fontSize: ".82rem", fontWeight: 700, background: count === n ? "var(--ac)" : "var(--ink3)", borderColor: count === n ? "var(--ac)" : "var(--line)", color: count === n ? "#fff" : "var(--t2)" }}>
                     {n}
                   </button>
                 ))}
@@ -316,13 +307,15 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
               <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".07em" }}>Zorluk</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {["Kolay", "Orta", "Zor", "Karışık"].map((d) => (
-                  <button key={d} onClick={() => setDiff(d)} style={{ flex: 1, padding: "8px 4px", borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontFamily: "Syne, sans-serif", fontSize: ".74rem", fontWeight: 700, background: diff === d ? "var(--teal)" : "var(--ink3)", borderColor: diff === d ? "var(--teal)" : "var(--line)", color: diff === d ? "var(--ink)" : "var(--t2)" }}>
+                  <button key={d} onClick={() => setDiff(d)}
+                    style={{ flex: 1, padding: "8px 4px", borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontFamily: "Syne, sans-serif", fontSize: ".74rem", fontWeight: 700, background: diff === d ? "var(--teal)" : "var(--ink3)", borderColor: diff === d ? "var(--teal)" : "var(--line)", color: diff === d ? "var(--ink)" : "var(--t2)" }}>
                     {d}
                   </button>
                 ))}
               </div>
             </div>
           </div>
+
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: ".82rem", color: "var(--t2)" }}>
               <input type="checkbox" checked={timerMode} onChange={(e) => setTimerMode(e.target.checked)} style={{ accentColor: "var(--ac)" }} />
@@ -335,6 +328,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
     );
   }
 
+  /* ─── LOADING ───────────────────────────────────────── */
   if (loading) {
     return (
       <div className="loading-screen">
@@ -345,6 +339,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
     );
   }
 
+  /* ─── RESULT ────────────────────────────────────────── */
   if (phase === "result") {
     const pct = Math.round((score / questions.length) * 100);
     const emoji = pct >= 80 ? "🏆" : pct >= 60 ? "✅" : pct >= 40 ? "📈" : "💪";
@@ -354,14 +349,18 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
         <div className="re">{emoji}</div>
         <div className="rs" style={{ color: pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--gold)" : "var(--ac)" }}>{pct}%</div>
         <div style={{ fontSize: ".82rem", color: "var(--t2)", marginBottom: 20 }}>{msg} {score}/{questions.length} doğru</div>
+
         <div className="rg">
           <div className="rst"><div className="rv" style={{ color: "var(--green)" }}>{score}</div><div className="rl2">Doğru</div></div>
           <div className="rst"><div className="rv" style={{ color: "var(--ac)" }}>{questions.length - score}</div><div className="rl2">Yanlış</div></div>
           <div className="rst"><div className="rv" style={{ color: "var(--teal)" }}>{questions.length}</div><div className="rl2">Toplam</div></div>
         </div>
+
         {wrongList.length > 0 && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--ac)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, textAlign: "left" }}>Yanlış Cevaplar</div>
+            <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--ac)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, textAlign: "left" }}>
+              Yanlış Cevaplar
+            </div>
             {wrongList.map(({ q }, i) => (
               <div key={i} style={{ background: "var(--rd)", border: "1px solid rgba(232,83,74,.2)", borderRadius: 9, padding: "12px 14px", marginBottom: 8, textAlign: "left" }}>
                 <div style={{ fontSize: ".78rem", color: "var(--t2)", marginBottom: 4 }}>{q.vaka?.slice(0, 120)}...</div>
@@ -371,6 +370,7 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
             ))}
           </div>
         )}
+
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
           <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); }}>✦ Yeni Quiz</button>
           <button className="btn btn-ghost" onClick={() => setCurrentPage("stats")}>📊 İstatistikler</button>
@@ -379,15 +379,14 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
     );
   }
 
+  /* ─── QUIZ ──────────────────────────────────────────── */
   const q = questions[current];
   if (!q) return null;
   const opts = ["A", "B", "C", "D", "E"];
-  const qImg = qImages[current];
-  const qImgIsLoading = qImgLoading[current];
 
   return (
     <div style={{ maxWidth: 680, margin: "0 auto" }}>
-      {/* Progress */}
+      {/* Progress bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase" }}>{current + 1} / {questions.length}</span>
@@ -405,44 +404,19 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
       </div>
 
       <div className="progress-bar" style={{ marginBottom: 18 }}>
-        <div className="progress-fill" style={{ width: `${((current) / questions.length) * 100}%` }} />
+        <div className="progress-fill" style={{ width: `${(current / questions.length) * 100}%` }} />
       </div>
 
       {/* Question card */}
       <div className="vc">
         <div className="vhdr">
           <span className="vlbl">Klinik Vaka — TUS Tarzı</span>
-          <span style={{ fontSize: ".6rem", color: "var(--t3)", marginLeft: "auto" }}>📖 Wikipedia Görsel</span>
         </div>
         <div className="vbody">
           <div className="vnum">{current + 1}</div>
           <div className="vq">{q.vaka}</div>
           <div className="vsoru">{q.soru}</div>
         </div>
-
-        {/* Wikipedia clinical image */}
-        {qImgIsLoading && (
-          <div className="quiz-img-wrap">
-            <div className="quiz-img-skeleton">
-              <span className="quiz-img-skeleton-icon">📖</span>
-              <span className="quiz-img-skeleton-txt">Wikipedia'dan klinik görsel yükleniyor<span className="loading-dots" /></span>
-            </div>
-          </div>
-        )}
-        {!qImgIsLoading && qImg && (
-          <div className="quiz-img-wrap">
-            <img
-              src={qImg.url}
-              alt={qImg.caption}
-              className="quiz-img"
-              onError={(e) => { const w = (e.currentTarget as HTMLImageElement).closest(".quiz-img-wrap") as HTMLElement | null; if (w) w.style.display = "none"; }}
-            />
-            <div className="quiz-img-caption">
-              <span style={{ color: "var(--teal)", marginRight: 5 }}>📖</span>
-              {qImg.caption} — <em style={{ color: "var(--t3)" }}>Wikipedia / Wikimedia Commons</em>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Options */}
@@ -462,27 +436,35 @@ Detaylı açıklama yaz: neden bu cevap doğru, diğerleri neden yanlış, TUS s
         })}
       </div>
 
-      {/* Feedback */}
+      {/* Immediate feedback */}
       {answered && selected !== null && (
         <div className={`feedback${selected === q.ans ? " ok" : " err"}`} style={{ marginBottom: 12 }}>
           <span>{selected === q.ans ? "✓" : "✗"}</span>
           <span>
-            {selected === q.ans ? "Doğru! " : `Yanlış. Doğru cevap: ${opts[q.ans]}) ${q.opts[q.ans]}. `}
+            {selected === q.ans
+              ? "Doğru! "
+              : `Yanlış. Doğru cevap: ${opts[q.ans]}) ${q.opts[q.ans]}. `}
             {q.exp}
           </span>
         </div>
       )}
 
-      {/* AI Explain */}
+      {/* AI deep explanation — on demand only */}
       {answered && (
         <div className="ai-box" style={{ marginBottom: 14 }}>
           <div className={`ai-box-header${aiLoading ? " pulsing" : ""}`}>
-            ✦ AI Açıklama
+            ✦ Detaylı AI Açıklama
             {!aiExp && !aiLoading && (
-              <button className="btn btn-teal sm" style={{ marginLeft: "auto" }} onClick={fetchAIExplain}>Analiz Et</button>
+              <button className="btn btn-teal sm" style={{ marginLeft: "auto" }} onClick={fetchAIExplain}>
+                Analiz Et
+              </button>
             )}
           </div>
-          {aiLoading && <div style={{ color: "var(--t2)", fontSize: ".8rem" }}>Mistral analiz yapıyor<span className="loading-dots" /></div>}
+          {aiLoading && (
+            <div style={{ color: "var(--t2)", fontSize: ".8rem", padding: "6px 0" }}>
+              Mistral analiz yapıyor<span className="loading-dots" />
+            </div>
+          )}
           {aiExp && <div className="nb" dangerouslySetInnerHTML={{ __html: aiExp }} />}
         </div>
       )}

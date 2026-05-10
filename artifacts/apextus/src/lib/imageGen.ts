@@ -219,9 +219,10 @@ const CAT_FALLBACK: Record<string, TopicMedia> = {
 
 /* ── Public API ─────────────────────────────────────────────── */
 
-/** Fetch up to 2 Wikipedia images for a note topic */
+/** Fetch up to 2 Wikipedia images for a note topic.
+ *  Only attempts fetch for topics explicitly in TOPIC_MAP — no generic fallbacks. */
 export async function generateNoteImages(cat: string, topic: string): Promise<NoteImage[]> {
-  const media = TOPIC_MAP[topic] ?? CAT_FALLBACK[cat];
+  const media = TOPIC_MAP[topic]; // CAT_FALLBACK intentionally NOT used for notes
   if (!media) return [];
 
   const results: NoteImage[] = [];
