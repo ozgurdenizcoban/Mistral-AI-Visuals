@@ -19,10 +19,13 @@ export default function Notes() {
 
   const noteRef = useRef<HTMLDivElement>(null);
 
-  // Inject inline educational diagram placeholders then resolve them.
+  // Inject supplementary Wikipedia images (only for old notes without HTML diagrams).
   useEffect(() => {
     if (!noteRef.current || !noteHtml || !activeTopic) return;
     const root = noteRef.current;
+
+    // New notes have inline edu-diagram elements — no external images needed
+    if (root.querySelectorAll(".edu-diagram").length > 0) return;
 
     // Collect explicit placeholders added by the Mistral prompt (new notes)
     let placeholders = Array.from(root.querySelectorAll<HTMLElement>(".nb-img[data-q]"));
@@ -100,13 +103,9 @@ export default function Notes() {
         const img = await fetchMedicalImage(query, capTopic, capCat);
         if (!noteRef.current?.contains(el)) return;
         if (img) {
-          const isAI = img.url.includes("pollinations.ai");
-          const srcLabel = isAI
-            ? "AI Destekli Eğitici Diyagram"
-            : "Wikipedia / Wikimedia Commons";
           el.innerHTML = `<figure class="inline-note-img">
             <img src="${img.url}" alt="${img.caption}" loading="eager" />
-            <figcaption>${img.caption}<span class="img-src"> — ${srcLabel}</span></figcaption>
+            <figcaption>${img.caption}<span class="img-src"> — Wikipedia</span></figcaption>
           </figure>`;
         } else {
           el.style.display = "none";
@@ -399,35 +398,63 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - <div class="score-box"><div class="score-title">SKOR</div>...</div>
 
 GÖRSEL DİYAGRAM KURALI (ZORUNLU — EN ÖNEMLİ KURAL):
-Her konuda 2–3 adet RENKLI HTML diyagramı üret. Dış görsel KULLANMA — tüm diyagramlar saf HTML/CSS ile yapılacak.
+Her konuda 2–3 adet RENKLI HTML diyagramı üret. Dış görsel KULLANMA — saf HTML/CSS. Oklar <div class="ed-arrow"></div> şeklinde yazılır (içi BOŞ bırakılır).
 
-YAPI:
+TİP 1 — Patofizyoloji Akış Şeması:
 <div class="edu-diagram">
-  <div class="ed-title">DİYAGRAM ADI</div>
+  <div class="ed-title">PAT0FİZYOLOJİ</div>
   <div class="ed-flow">
+    <div class="ed-node ed-red">Primer Etken</div>
+    <div class="ed-arrow"></div>
     <div class="ed-row">
-      <div class="ed-node ed-red">Etken</div>
-      <div class="ed-node ed-orange">Mekanizma</div>
+      <div class="ed-node ed-orange">Mekanizma A</div>
+      <div class="ed-node ed-orange">Mekanizma B</div>
     </div>
-    <div class="ed-arrow">↓</div>
-    <div class="ed-node ed-gold">Patoloji</div>
-    <div class="ed-arrow">↓</div>
+    <div class="ed-arrow"></div>
+    <div class="ed-node ed-gold">Patolojik Sonuç</div>
+    <div class="ed-arrow"></div>
     <div class="ed-row">
-      <div class="ed-node ed-teal">Belirti 1</div>
-      <div class="ed-node ed-blue">Belirti 2</div>
+      <div class="ed-node ed-blue">Semptom 1</div>
+      <div class="ed-node ed-blue">Semptom 2</div>
       <div class="ed-node ed-purple">Komplikasyon</div>
     </div>
   </div>
 </div>
 
-RENK KODLARI: .ed-red=kritik/neden | .ed-orange=mekanizma | .ed-gold=bulgu/tanı | .ed-teal=tedavi | .ed-blue=klinik | .ed-purple=komplikasyon | .ed-green=normal/iyi | .ed-gray=yardımcı
+TİP 2 — Sınıflama / Karşılaştırma:
+<div class="edu-diagram">
+  <div class="ed-title">SINIFLANDIRMA</div>
+  <div class="ed-flow">
+    <div class="ed-node ed-gray">Ana Başlık</div>
+    <div class="ed-arrow"></div>
+    <div class="ed-row">
+      <div class="ed-node ed-red">Tip 1<br/><small style="font-weight:400;opacity:.85">özellik</small></div>
+      <div class="ed-node ed-teal">Tip 2<br/><small style="font-weight:400;opacity:.85">özellik</small></div>
+      <div class="ed-node ed-blue">Tip 3<br/><small style="font-weight:400;opacity:.85">özellik</small></div>
+    </div>
+  </div>
+</div>
 
-ZORUNLU DİYAGRAM TİPLERİ (2–3 kullan):
-1. Patofizyoloji akış şeması → h2 "Patofizyoloji"den hemen sonra
-2. Sınıflama/tip diyagramı → h2 "Sınıflama"dan hemen sonra  
-3. Tedavi basamak diyagramı → h2 "Tedavi"den hemen sonra
+TİP 3 — Tedavi Algoritması (Basamaklı):
+<div class="edu-diagram">
+  <div class="ed-title">TEDAVİ ALGORİTMASI</div>
+  <div class="ed-flow">
+    <div class="ed-node ed-gold">1. Basamak: İlk İlaç / Yaklaşım</div>
+    <div class="ed-arrow"></div>
+    <div class="ed-node ed-orange">Yetersiz Yanıt / Kontrendikasyon</div>
+    <div class="ed-arrow"></div>
+    <div class="ed-node ed-teal">2. Basamak: Alternatif / Ek İlaç</div>
+    <div class="ed-arrow"></div>
+    <div class="ed-row">
+      <div class="ed-node ed-blue">3a: Kombinasyon</div>
+      <div class="ed-node ed-purple">3b: Özel Durum / Acil</div>
+    </div>
+  </div>
+</div>
 
-HER DİYAGRAM: gerçek tıbbi içerik içermeli, Türkçe etiketler, 4–8 renkli kutucuk, ok işaretleri (↓ → ↑)
+RENK KODLARI: ed-red=kritik/etken | ed-orange=mekanizma/uyarı | ed-gold=bulgu/tanı | ed-teal=tedavi/çözüm | ed-blue=klinik belirti | ed-purple=komplikasyon/acil | ed-green=iyi prognoz | ed-gray=nötr/genel
+KURALLAR: ed-arrow MUTLAKA BOŞ (<div class="ed-arrow"></div>), Türkçe etiketler, gerçek ilaç/hastalık adları, 5–10 kutucuk/diyagram
+DİYAGRAMLARI: Patofizyoloji h2'sinden → hemen sonra | Sınıflama h2'sinden → hemen sonra | Tedavi h2'sinden → hemen sonra
 
 ZORUNLU BÖLÜMLER:
 <h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>

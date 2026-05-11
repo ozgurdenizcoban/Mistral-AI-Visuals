@@ -604,21 +604,70 @@ body {
   width: 100%;
 }
 .edu-diagram .ed-node {
-  padding: 8px 16px;
-  border-radius: 9px;
-  font-size: .78rem;
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: .79rem;
   font-weight: 700;
   color: #fff;
   text-align: center;
   min-width: 100px;
-  max-width: 200px;
-  line-height: 1.4;
+  max-width: 210px;
+  line-height: 1.45;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
 }
+/* Vertical down-arrow (CSS line + triangle) */
 .edu-diagram .ed-arrow {
-  font-size: 1.3rem;
-  color: var(--t2);
-  line-height: 1;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 20px;
+  min-height: 36px;
+  font-size: 0;
+  color: transparent;
+  margin: 2px auto;
+}
+.edu-diagram .ed-arrow::before {
+  content: "";
+  width: 2px;
+  flex: 1;
+  min-height: 14px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 1px;
+}
+.edu-diagram .ed-arrow::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 10px solid rgba(255,255,255,0.3);
+}
+/* Horizontal right-arrow */
+.edu-diagram .ed-arrow-h {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 20px;
+  min-width: 36px;
+  font-size: 0;
+  color: transparent;
+  margin: auto 2px;
+}
+.edu-diagram .ed-arrow-h::before {
+  content: "";
+  height: 2px;
+  flex: 1;
+  min-width: 14px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 1px;
+}
+.edu-diagram .ed-arrow-h::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 10px solid rgba(255,255,255,0.3);
 }
 .edu-diagram .ed-label {
   font-size: .68rem;

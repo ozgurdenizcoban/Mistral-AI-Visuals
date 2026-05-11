@@ -32,133 +32,6 @@ async function fetchWikiImage(articleTitle: string): Promise<NoteImage | null> {
   } catch (_) { return null; }
 }
 
-/* ── Wikimedia Commons full-text search ─────────────────────── */
-// SVGs are almost always labeled educational diagrams on Commons, so we
-// prefer them over raster photos.
-async function searchCommonsImage(query: string): Promise<NoteImage | null> {
-  try {
-    const params = new URLSearchParams({
-      action: "query",
-      generator: "search",
-      gsrsearch: query,
-      gsrnamespace: "6",
-      gsrlimit: "30",
-      prop: "imageinfo",
-      iiprop: "url|mime|size",
-      iiurlwidth: "900",
-      format: "json",
-      origin: "*",
-    });
-    const resp = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
-      signal: AbortSignal.timeout(9000),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const pages = Object.values(data?.query?.pages || {}) as Record<string, unknown>[];
-
-    const svgHits: NoteImage[] = [];
-    const rasterHits: NoteImage[] = [];
-
-    for (const p of pages) {
-      const page = p as {
-        imageinfo?: { mime?: string; thumburl?: string; url?: string; thumbwidth?: number; width?: number }[];
-        title?: string;
-      };
-      const ii = page.imageinfo?.[0];
-      if (!ii) continue;
-      const mime = ii.mime || "";
-      const isSvg = mime.includes("svg");
-      const isRaster = mime.includes("jpeg") || mime.includes("png");
-      if (!isSvg && !isRaster) continue;
-
-      // Raster images must be at least 300 px wide
-      if (isRaster && (ii.thumbwidth || ii.width || 0) < 300) continue;
-
-      const src = ii.thumburl || ii.url;
-      if (!src) continue;
-      const cap = String(page.title || "")
-        .replace("File:", "")
-        .replace(/_/g, " ")
-        .replace(/\.[^.]+$/, "");
-
-      if (isSvg) svgHits.push({ url: src, caption: cap });
-      else rasterHits.push({ url: src, caption: cap });
-    }
-
-    // Prefer SVG (labeled diagrams) over raster photos
-    if (svgHits.length > 0) return svgHits[0];
-    if (rasterHits.length > 0) return rasterHits[0];
-    return null;
-  } catch (_) {
-    return null;
-  }
-}
-
-/* ── Commons diagram-first search ───────────────────────────── */
-// Searches specifically for labeled educational diagrams/illustrations.
-async function searchEducationalDiagram(query: string): Promise<NoteImage | null> {
-  // Try with "diagram" keyword first (returns labeled SVGs on Commons)
-  const d1 = await searchCommonsImage(query + " labeled diagram");
-  if (d1) return d1;
-  // Try anatomy/scheme variant
-  const d2 = await searchCommonsImage(query + " anatomy scheme");
-  if (d2) return d2;
-  return null;
-}
-
-/* ── Wikipedia article search → best image ──────────────────── */
-async function searchWikiArticleImage(query: string): Promise<NoteImage | null> {
-  try {
-    const params = new URLSearchParams({
-      action: "query",
-      list: "search",
-      srsearch: query,
-      srnamespace: "0",
-      srlimit: "5",
-      format: "json",
-      origin: "*",
-    });
-    const resp = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
-      signal: AbortSignal.timeout(7000),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const results = (data?.query?.search || []) as { title: string }[];
-    for (const r of results.slice(0, 3)) {
-      const img = await fetchWikiImage(r.title);
-      if (img) return { ...img, caption: r.title };
-    }
-    return null;
-  } catch (_) {
-    return null;
-  }
-}
-
-/* ── Deterministic seed from query string ───────────────────── */
-function queryHash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % 999983;
-}
-
-/** Generate a clean medical illustration via Pollinations.ai.
- *  Does NOT request text labels — AI cannot render readable text.
- *  Used only when no Wikipedia diagram is found. */
-async function generateEducationalDiagram(query: string): Promise<NoteImage> {
-  const prompt = [
-    "clean medical scientific illustration,",
-    query + ",",
-    "no text labels, no words, no annotations,",
-    "white background, flat design, medical textbook artwork,",
-    "simple minimal illustration, no clutter, no watermark",
-  ].join(" ");
-  const seed = queryHash(query);
-  const url =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
-    `?width=860&height=560&nologo=true&model=flux&seed=${seed}`;
-  return { url, caption: query };
-}
-
 /** Get an English diagram query for any topic using TOPIC_MAP / CAT_FALLBACK.
  *  Appends the given suffix so callers can customise (e.g. "anatomy diagram"). */
 export function getTopicDiagramQuery(topic: string, cat: string, suffix: string): string {
@@ -167,27 +40,26 @@ export function getTopicDiagramQuery(topic: string, cat: string, suffix: string)
   return `${cat} medical ${suffix}`.toLowerCase();
 }
 
-/** Fetch the best educational diagram for a note topic.
- *  1) Wikipedia article thumbnail from TOPIC_MAP  (clean, textbook-quality)
- *  2) AI-generated flat diagram via Pollinations.ai (always succeeds)
+/** Fetch the best educational image for a note topic.
+ *  Uses Wikipedia article thumbnail — fast single API call.
+ *  Returns null if nothing found (notes have built-in HTML diagrams as primary visuals).
  */
 export async function fetchMedicalImage(
   query: string,
   topic?: string,
   cat?: string,
 ): Promise<NoteImage | null> {
-  // Try Wikipedia article thumbnail first — they are real textbook diagrams
   if (topic) {
     const media = TOPIC_MAP[topic] || (cat ? CAT_FALLBACK[cat] : null);
     if (media) {
-      for (const article of media.articles.slice(0, 2)) {
-        const img = await fetchWikiImage(article);
-        if (img) return img;
-      }
+      const img = await Promise.race([
+        fetchWikiImage(media.articles[0]),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 5000)),
+      ]);
+      if (img) return img;
     }
   }
-  // Guaranteed fallback: AI-generated clean diagram
-  return generateEducationalDiagram(query);
+  return null;
 }
 
 /* ── Per-topic Wikipedia article & Commons query map ───────── */
@@ -350,12 +222,6 @@ export async function generateNoteImages(cat: string, topic: string): Promise<No
     if (img) results.push(img);
   }
 
-  // Commons search fallback
-  if (results.length < 1) {
-    const img = await searchCommonsImage(media.query);
-    if (img) results.push(img);
-  }
-
   return results;
 }
 
@@ -366,12 +232,11 @@ export async function getQuizImage(tags: string[]): Promise<NoteImage | null> {
   const media = TOPIC_MAP[topic];
   if (!media) return null;
 
-  // Try up to 2 articles for the best result
   for (const article of media.articles.slice(0, 2)) {
     const img = await fetchWikiImage(article);
     if (img) return img;
   }
-  return searchCommonsImage(media.query);
+  return null;
 }
 
 /** Build img-grid HTML for embedding in note innerHTML */
