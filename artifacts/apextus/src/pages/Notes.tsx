@@ -28,13 +28,16 @@ export default function Notes() {
     // Collect explicit placeholders first
     let placeholders = Array.from(root.querySelectorAll<HTMLElement>(".nb-img[data-q]"));
 
-    // Old cached notes: inject divs after Patofizyoloji / Laboratuvar / Tedavi h2s
+    // All notes: always inject diagram placeholders after key h2 sections
+    // (nb-img placeholders from new notes will have been picked up above;
+    // for old cached notes this is the only source of images)
     if (placeholders.length === 0) {
       const h2s = Array.from(root.querySelectorAll<HTMLElement>("h2"));
       const targets: { kw: string; suffix: string }[] = [
-        { kw: "patofizyoloji", suffix: "pathophysiology mechanism diagram" },
-        { kw: "laboratuvar",   suffix: "radiology imaging diagnosis" },
-        { kw: "tedavi",        suffix: "treatment pharmacology" },
+        { kw: "patofizyoloji", suffix: "anatomy physiology labeled diagram illustration" },
+        { kw: "laboratuvar",   suffix: "anatomy labeled diagram scheme" },
+        { kw: "tanı",          suffix: "anatomy diagram labeled illustration" },
+        { kw: "tedavi",        suffix: "mechanism pharmacology diagram illustration" },
       ];
       for (const { kw, suffix } of targets) {
         const h2 = h2s.find(h => (h.textContent || "").toLowerCase().includes(kw));
@@ -354,14 +357,22 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 
 GÖRSEL YER TUTUCUSU KURALI (ÇOK ÖNEMLİ):
 - Her konuda, içerikle ilgili 2-3 adet görsel yer tutucu ekle.
-- Format: <div class="nb-img" data-q="INGILIZCE_ARAMA_TERIMI"></div>
-- Bunları şu bölümlerin h2'sinden HEMEN SONRA (içeriğin başında) yerleştir:
-  * 2. Patofizyoloji bölümünden sonra → mekanizma/patoloji görseli
-  * 7. Laboratuvar ve Görüntüleme bölümünden sonra → radyoloji/lab görseli
-  * 9. Tedavi bölümünden sonra → tedavi/ilaç mekanizması görseli (isteğe bağlı)
-- INGILIZCE_ARAMA_TERIMI: Wikipedia'da gerçek medikal görsel bulacak spesifik İngilizce terim
-  (örn: "heart failure echocardiogram", "pneumonia chest X-ray", "diabetes mellitus insulin mechanism", "cirrhosis liver histology")
-- Konuya özgün, gerçek tıbbi görsel getireceğinden emin ol.
+- Format: <div class="nb-img" data-q="INGILIZCE_DIYAGRAM_TERIMI"></div>
+- Bunları şu bölümlerin h2'sinden HEMEN SONRA yerleştir:
+  * 2. Patofizyoloji bölümünden sonra → mekanizma/anatomi diyagramı
+  * 7. Laboratuvar ve Görüntüleme bölümünden sonra → anatomi/şema
+  * 9. Tedavi bölümünden sonra → mekanizma/farmakoloji şeması (isteğe bağlı)
+- INGILIZCE_DIYAGRAM_TERIMI KURALLARI (ÇOK ÖNEMLİ):
+  * Wikimedia Commons'ta etiketli eğitici diyagram/şema bulacak İngilizce terim
+  * Mutlaka şu kelimelerden birini ekle: "anatomy diagram", "labeled diagram", "illustration", "scheme", "physiology diagram"
+  * Örnekler:
+    - "heart failure pathophysiology anatomy diagram"
+    - "blood cell types labeled illustration"
+    - "insulin resistance mechanism scheme"
+    - "pneumonia lung anatomy labeled diagram"
+    - "kidney nephron anatomy labeled"
+    - "liver cirrhosis pathology diagram"
+  * Fotoğraf değil, eğitici çizim/diyagram getiren terim olsun.
 
 DİYAGRAM KURALI: Her konuda en az 1 adet tanı veya tedavi algoritması diyagramı (.algo veya .flowchart) yaz.
 

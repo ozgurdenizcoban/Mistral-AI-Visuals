@@ -34,7 +34,9 @@ async function fetchWikiImage(articleTitle: string): Promise<NoteImage | null> {
   }
 }
 
-/* ── Wikimedia Commons full-text search (fallback) ──────────── */
+/* ── Wikimedia Commons full-text search ─────────────────────── */
+// SVGs are almost always labeled educational diagrams on Commons, so we
+// prefer them over raster photos.
 async function searchCommonsImage(query: string): Promise<NoteImage | null> {
   try {
     const params = new URLSearchParams({
@@ -42,36 +44,68 @@ async function searchCommonsImage(query: string): Promise<NoteImage | null> {
       generator: "search",
       gsrsearch: query,
       gsrnamespace: "6",
-      gsrlimit: "20",
+      gsrlimit: "30",
       prop: "imageinfo",
       iiprop: "url|mime|size",
-      iiurlwidth: "800",
+      iiurlwidth: "900",
       format: "json",
       origin: "*",
     });
     const resp = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(9000),
     });
     if (!resp.ok) return null;
     const data = await resp.json();
     const pages = Object.values(data?.query?.pages || {}) as Record<string, unknown>[];
+
+    const svgHits: NoteImage[] = [];
+    const rasterHits: NoteImage[] = [];
+
     for (const p of pages) {
-      const page = p as { imageinfo?: { mime?: string; thumburl?: string; url?: string; thumbwidth?: number; width?: number }[]; title?: string };
+      const page = p as {
+        imageinfo?: { mime?: string; thumburl?: string; url?: string; thumbwidth?: number; width?: number }[];
+        title?: string;
+      };
       const ii = page.imageinfo?.[0];
       if (!ii) continue;
       const mime = ii.mime || "";
-      if (!mime.includes("jpeg") && !mime.includes("png")) continue;
-      const w = ii.thumbwidth || ii.width || 0;
-      if (w < 300) continue;
+      const isSvg = mime.includes("svg");
+      const isRaster = mime.includes("jpeg") || mime.includes("png");
+      if (!isSvg && !isRaster) continue;
+
+      // Raster images must be at least 300 px wide
+      if (isRaster && (ii.thumbwidth || ii.width || 0) < 300) continue;
+
       const src = ii.thumburl || ii.url;
       if (!src) continue;
-      const cap = String(page.title || "").replace("File:", "").replace(/_/g, " ").replace(/\.[^.]+$/, "");
-      return { url: src, caption: cap };
+      const cap = String(page.title || "")
+        .replace("File:", "")
+        .replace(/_/g, " ")
+        .replace(/\.[^.]+$/, "");
+
+      if (isSvg) svgHits.push({ url: src, caption: cap });
+      else rasterHits.push({ url: src, caption: cap });
     }
+
+    // Prefer SVG (labeled diagrams) over raster photos
+    if (svgHits.length > 0) return svgHits[0];
+    if (rasterHits.length > 0) return rasterHits[0];
     return null;
   } catch (_) {
     return null;
   }
+}
+
+/* ── Commons diagram-first search ───────────────────────────── */
+// Searches specifically for labeled educational diagrams/illustrations.
+async function searchEducationalDiagram(query: string): Promise<NoteImage | null> {
+  // Try with "diagram" keyword first (returns labeled SVGs on Commons)
+  const d1 = await searchCommonsImage(query + " labeled diagram");
+  if (d1) return d1;
+  // Try anatomy/scheme variant
+  const d2 = await searchCommonsImage(query + " anatomy scheme");
+  if (d2) return d2;
+  return null;
 }
 
 /* ── Wikipedia article search → best image ──────────────────── */
@@ -102,9 +136,12 @@ async function searchWikiArticleImage(query: string): Promise<NoteImage | null> 
   }
 }
 
-/** Fetch the best medical image for an English search query.
- *  1st: Wikipedia article search  2nd: Wikimedia Commons full-text */
+/** Fetch the best educational diagram/image for a medical query.
+ *  Priority: 1) Commons diagram (SVG labeled)  2) Wikipedia article
+ *            3) Commons general search */
 export async function fetchMedicalImage(query: string): Promise<NoteImage | null> {
+  const diagram = await searchEducationalDiagram(query);
+  if (diagram) return diagram;
   const wiki = await searchWikiArticleImage(query);
   if (wiki) return wiki;
   return searchCommonsImage(query);
