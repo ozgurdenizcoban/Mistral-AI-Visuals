@@ -88,12 +88,16 @@ export default function Notes() {
 
     if (!placeholders.length) return;
 
+    // Capture topic/cat at effect time so async callbacks stay correct
+    const capTopic = activeTopic.topic;
+    const capCat = activeTopic.cat;
+
     placeholders.forEach(async (el) => {
       const query = el.getAttribute("data-q");
       if (!query) { el.style.display = "none"; return; }
       el.innerHTML = `<div class="nb-img-skeleton"><span class="spin2"></span>&nbsp;Görsel yükleniyor...</div>`;
       try {
-        const img = await fetchMedicalImage(query);
+        const img = await fetchMedicalImage(query, capTopic, capCat);
         if (!noteRef.current?.contains(el)) return;
         if (img) {
           const isAI = img.url.includes("pollinations.ai");

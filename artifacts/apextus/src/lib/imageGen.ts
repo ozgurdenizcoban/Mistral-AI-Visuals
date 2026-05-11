@@ -143,20 +143,20 @@ function queryHash(s: string): number {
   return Math.abs(h) % 999983;
 }
 
-/** Generate a labeled educational anatomy diagram via Pollinations.ai.
- *  Always returns a valid image URL — no CORS issues, no search failures. */
+/** Generate a simple, clean labeled diagram via Pollinations.ai.
+ *  Prompt is tuned for readability: flat design, few large labels, no clutter. */
 async function generateEducationalDiagram(query: string): Promise<NoteImage> {
   const prompt = [
-    "medical educational labeled anatomy diagram",
-    query,
-    "clean white background, textbook illustration style,",
-    "color-coded with arrows and text labels, scientific infographic,",
-    "anatomical chart, no watermarks, no people, high detail",
+    "simple flat design medical illustration,",
+    query + ",",
+    "4 to 6 large readable text labels with arrows,",
+    "plain white background, minimal clean style,",
+    "medical textbook vector art, no clutter, no watermark, no people",
   ].join(" ");
   const seed = queryHash(query);
   const url =
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
-    `?width=900&height=580&nologo=true&model=flux&seed=${seed}`;
+    `?width=860&height=560&nologo=true&model=flux&seed=${seed}`;
   return { url, caption: query };
 }
 
@@ -165,12 +165,29 @@ async function generateEducationalDiagram(query: string): Promise<NoteImage> {
 export function getTopicDiagramQuery(topic: string, cat: string, suffix: string): string {
   const media = TOPIC_MAP[topic] || CAT_FALLBACK[cat];
   if (media) return `${media.query} ${suffix}`;
-  // Last-resort generic fallback
   return `${cat} medical ${suffix}`.toLowerCase();
 }
 
-/** Generate an AI educational diagram (Pollinations.ai) — ALWAYS returns an image. */
-export async function fetchMedicalImage(query: string): Promise<NoteImage | null> {
+/** Fetch the best educational diagram for a note topic.
+ *  1) Wikipedia article thumbnail from TOPIC_MAP  (clean, textbook-quality)
+ *  2) AI-generated flat diagram via Pollinations.ai (always succeeds)
+ */
+export async function fetchMedicalImage(
+  query: string,
+  topic?: string,
+  cat?: string,
+): Promise<NoteImage | null> {
+  // Try Wikipedia article thumbnail first — they are real textbook diagrams
+  if (topic) {
+    const media = TOPIC_MAP[topic] || (cat ? CAT_FALLBACK[cat] : null);
+    if (media) {
+      for (const article of media.articles.slice(0, 2)) {
+        const img = await fetchWikiImage(article);
+        if (img) return img;
+      }
+    }
+  }
+  // Guaranteed fallback: AI-generated clean diagram
   return generateEducationalDiagram(query);
 }
 
