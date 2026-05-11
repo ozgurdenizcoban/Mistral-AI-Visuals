@@ -40,6 +40,9 @@ export default function Quiz() {
   // Per-question image state (only for mapped topics)
   const [qImages, setQImages] = useState<Record<number, ImgState>>({});
 
+  // Track which image URLs have been shown this session — prevents duplicates
+  const usedImageUrls = useRef<Set<string>>(new Set());
+
   // Refs to always have fresh values inside async callbacks
   const currentRef = useRef(current);
   const selectedRef = useRef(selected);
@@ -48,15 +51,23 @@ export default function Quiz() {
   useEffect(() => { selectedRef.current = selected; }, [selected]);
   useEffect(() => { questionsRef.current = questions; }, [questions]);
 
-  // Load image selectively — only when topic is in TOPIC_MAP
+  // Load image selectively — only when topic is in TOPIC_MAP and URL not already used this session
   useEffect(() => {
     if (phase !== "quiz" || !questions[current]) return;
-    if (qImages[current] !== undefined) return; // already fetched or loading
+    if (qImages[current] !== undefined) return;
 
     const q = questions[current];
     setQImages((prev) => ({ ...prev, [current]: "loading" }));
     getQuizImage(q.tags || [])
-      .then((img) => setQImages((prev) => ({ ...prev, [current]: img })))
+      .then((img) => {
+        if (img && !usedImageUrls.current.has(img.url)) {
+          usedImageUrls.current.add(img.url);
+          setQImages((prev) => ({ ...prev, [current]: img }));
+        } else {
+          // Image was already shown for another question — skip
+          setQImages((prev) => ({ ...prev, [current]: null }));
+        }
+      })
       .catch(() => setQImages((prev) => ({ ...prev, [current]: null })));
   }, [current, phase, questions]);
 
@@ -99,6 +110,7 @@ export default function Quiz() {
     setAnswered(false);
     setAiExp(null);
     setQImages({});
+    usedImageUrls.current = new Set();
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
@@ -168,7 +180,10 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
       if (!qs.length) throw new Error("Sorular üretilemedi");
 
       setQuestions(qs);
-      fbSaveQuestions(topic || activeCat, diff, qs).catch(() => {});
+      // Save and immediately mark as seen so they never repeat
+      fbSaveQuestions(topic || activeCat, diff, qs)
+        .then((savedIds) => { if (savedIds.length) markSeenQ(savedIds); })
+        .catch(() => {});
       setLoading(false);
       if (timerMode) startTimer();
     } catch (e) {

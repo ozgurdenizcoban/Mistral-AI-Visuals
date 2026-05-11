@@ -83,16 +83,20 @@ export async function fbGetQuestions(
   }
 }
 
+/** Saves questions to Firebase pool and returns the auto-generated doc IDs
+ *  so the caller can immediately mark them as seen. */
 export async function fbSaveQuestions(
   topic: string,
   diff: string,
   questions: QuizQuestion[]
-): Promise<void> {
+): Promise<string[]> {
+  const savedIds: string[] = [];
   try {
     const col = collection(db, "questions", `${topicKey(topic)}__${diff}`, "pool");
     const batch = writeBatch(db);
     questions.forEach((q) => {
       const ref = doc(col);
+      savedIds.push(ref.id);
       batch.set(ref, {
         vaka: q.vaka || "", soru: q.soru || "", opts: q.opts || [],
         ans: q.ans || 0, exp: q.exp || "", cat: q.cat || topic,
@@ -103,6 +107,7 @@ export async function fbSaveQuestions(
   } catch (e) {
     console.warn("Q save error:", e);
   }
+  return savedIds;
 }
 
 export async function fbGetAnalysis(fp: string): Promise<string | null> {
