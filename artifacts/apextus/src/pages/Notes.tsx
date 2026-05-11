@@ -398,26 +398,36 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - <div class="mnem"><strong>🧠 MNEM:</strong> ...</div>
 - <div class="score-box"><div class="score-title">SKOR</div>...</div>
 
-GÖRSEL YER TUTUCUSU KURALI (ÇOK ÖNEMLİ):
-- Her konuda, içerikle ilgili 2-3 adet görsel yer tutucu ekle.
-- Format: <div class="nb-img" data-q="INGILIZCE_DIYAGRAM_TERIMI"></div>
-- Bunları şu bölümlerin h2'sinden HEMEN SONRA yerleştir:
-  * 2. Patofizyoloji bölümünden sonra → mekanizma/anatomi diyagramı
-  * 7. Laboratuvar ve Görüntüleme bölümünden sonra → anatomi/şema
-  * 9. Tedavi bölümünden sonra → mekanizma/farmakoloji şeması (isteğe bağlı)
-- INGILIZCE_DIYAGRAM_TERIMI KURALLARI (ÇOK ÖNEMLİ):
-  * Wikimedia Commons'ta etiketli eğitici diyagram/şema bulacak İngilizce terim
-  * Mutlaka şu kelimelerden birini ekle: "anatomy diagram", "labeled diagram", "illustration", "scheme", "physiology diagram"
-  * Örnekler:
-    - "heart failure pathophysiology anatomy diagram"
-    - "blood cell types labeled illustration"
-    - "insulin resistance mechanism scheme"
-    - "pneumonia lung anatomy labeled diagram"
-    - "kidney nephron anatomy labeled"
-    - "liver cirrhosis pathology diagram"
-  * Fotoğraf değil, eğitici çizim/diyagram getiren terim olsun.
+GÖRSEL DİYAGRAM KURALI (ZORUNLU — EN ÖNEMLİ KURAL):
+Her konuda 2–3 adet RENKLI HTML diyagramı üret. Dış görsel KULLANMA — tüm diyagramlar saf HTML/CSS ile yapılacak.
 
-DİYAGRAM KURALI: Her konuda en az 1 adet tanı veya tedavi algoritması diyagramı (.algo veya .flowchart) yaz.
+YAPI:
+<div class="edu-diagram">
+  <div class="ed-title">DİYAGRAM ADI</div>
+  <div class="ed-flow">
+    <div class="ed-row">
+      <div class="ed-node ed-red">Etken</div>
+      <div class="ed-node ed-orange">Mekanizma</div>
+    </div>
+    <div class="ed-arrow">↓</div>
+    <div class="ed-node ed-gold">Patoloji</div>
+    <div class="ed-arrow">↓</div>
+    <div class="ed-row">
+      <div class="ed-node ed-teal">Belirti 1</div>
+      <div class="ed-node ed-blue">Belirti 2</div>
+      <div class="ed-node ed-purple">Komplikasyon</div>
+    </div>
+  </div>
+</div>
+
+RENK KODLARI: .ed-red=kritik/neden | .ed-orange=mekanizma | .ed-gold=bulgu/tanı | .ed-teal=tedavi | .ed-blue=klinik | .ed-purple=komplikasyon | .ed-green=normal/iyi | .ed-gray=yardımcı
+
+ZORUNLU DİYAGRAM TİPLERİ (2–3 kullan):
+1. Patofizyoloji akış şeması → h2 "Patofizyoloji"den hemen sonra
+2. Sınıflama/tip diyagramı → h2 "Sınıflama"dan hemen sonra  
+3. Tedavi basamak diyagramı → h2 "Tedavi"den hemen sonra
+
+HER DİYAGRAM: gerçek tıbbi içerik içermeli, Türkçe etiketler, 4–8 renkli kutucuk, ok işaretleri (↓ → ↑)
 
 ZORUNLU BÖLÜMLER:
 <h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>

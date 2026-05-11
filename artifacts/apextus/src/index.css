@@ -568,3 +568,72 @@ body {
 .acc-value { font-size: .92rem; color: var(--text); font-weight: 600; }
 .danger-btn { background: rgba(232,83,74,.12); color: var(--ac); border: 1px solid rgba(232,83,74,.25); }
 .danger-btn:hover { background: rgba(232,83,74,.2); }
+
+/* ===== EDUCATIONAL HTML DIAGRAM (note inline) ===== */
+.edu-diagram {
+  background: var(--ink2);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 22px 20px;
+  margin: 22px 0;
+  font-family: "Syne", sans-serif;
+  overflow: hidden;
+}
+.edu-diagram .ed-title {
+  font-size: .82rem;
+  font-weight: 800;
+  color: var(--cream);
+  text-align: center;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.edu-diagram .ed-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.edu-diagram .ed-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+.edu-diagram .ed-node {
+  padding: 8px 16px;
+  border-radius: 9px;
+  font-size: .78rem;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  min-width: 100px;
+  max-width: 200px;
+  line-height: 1.4;
+}
+.edu-diagram .ed-arrow {
+  font-size: 1.3rem;
+  color: var(--t2);
+  line-height: 1;
+  text-align: center;
+}
+.edu-diagram .ed-label {
+  font-size: .68rem;
+  color: var(--t3);
+  text-align: center;
+  font-style: italic;
+  margin-top: 2px;
+}
+/* Node colour variants */
+.edu-diagram .ed-red    { background: #e84a5f; }
+.edu-diagram .ed-orange { background: #e17055; }
+.edu-diagram .ed-gold   { background: #f59e0b; color: #1a1a2e; }
+.edu-diagram .ed-teal   { background: #2dd4bf; color: #1a1a2e; }
+.edu-diagram .ed-blue   { background: #3b82f6; }
+.edu-diagram .ed-purple { background: #8b5cf6; }
+.edu-diagram .ed-green  { background: #10b981; }
+.edu-diagram .ed-gray   { background: rgba(255,255,255,.12); color: var(--text); border: 1px solid var(--line); }
+.edu-diagram .ed-dark   { background: var(--ink3); color: var(--text); border: 1px solid var(--line2); }

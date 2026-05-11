@@ -3,87 +3,8 @@ export interface NoteImage {
   caption: string;
 }
 
-/* ── Diagram-keyword filter for Wikipedia image filenames ────── */
-const DIAGRAM_KW = ["diagram", "anatomy", "scheme", "schema", "illustration",
-  "structure", "cycle", "pathway", "mechanism", "physiology", "cross-section",
-  "labeled", "infographic", "overview", "chart"];
-
-function isDiagramFile(title: string): boolean {
-  const t = title.toLowerCase();
-  return DIAGRAM_KW.some(k => t.includes(k)) && !t.includes("icon") &&
-    !t.includes("logo") && !t.includes("flag") && !t.includes("map");
-}
-
-/* ── Wikipedia article → list all embedded images ───────────── */
-async function fetchWikiArticleImages(articleTitle: string): Promise<string[]> {
-  try {
-    const params = new URLSearchParams({
-      action: "query",
-      titles: articleTitle,
-      prop: "images",
-      imlimit: "50",
-      format: "json",
-      origin: "*",
-    });
-    const resp = await fetch(`https://en.wikipedia.org/w/api.php?${params}`,
-      { signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    const pages = Object.values(data?.query?.pages || {}) as Record<string, unknown>[];
-    const page = pages[0] as { images?: { title: string }[] } | undefined;
-    return (page?.images || []).map(i => i.title);
-  } catch (_) { return []; }
-}
-
-/* ── Resolve a File: title → 800 px render URL ──────────────── */
-async function resolveWikiFile(fileTitle: string): Promise<NoteImage | null> {
-  try {
-    const params = new URLSearchParams({
-      action: "query",
-      titles: fileTitle,
-      prop: "imageinfo",
-      iiprop: "url|size",
-      iiurlwidth: "800",
-      format: "json",
-      origin: "*",
-    });
-    const resp = await fetch(`https://en.wikipedia.org/w/api.php?${params}`,
-      { signal: AbortSignal.timeout(6000) });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const pages = Object.values(data?.query?.pages || {}) as Record<string, unknown>[];
-    const page = pages[0] as { imageinfo?: { url?: string; thumburl?: string; width?: number }[] } | undefined;
-    const ii = page?.imageinfo?.[0];
-    if (!ii) return null;
-    const src = ii.thumburl || ii.url;
-    if (!src || (ii.width || 0) < 100) return null;
-    const cap = fileTitle.replace("File:", "").replace(/_/g, " ").replace(/\.[^.]+$/, "");
-    return { url: src, caption: cap };
-  } catch (_) { return null; }
-}
-
-/* ── Wikipedia article → best educational diagram image ─────── */
-// 1) All images in article → prefer diagram-named files → resolve URL
-// 2) Fall back to article main thumbnail
+/* ── Wikipedia article → main thumbnail (single fast API call) ── */
 async function fetchWikiImage(articleTitle: string): Promise<NoteImage | null> {
-  // Step 1: list all images in the article
-  const allImages = await fetchWikiArticleImages(articleTitle);
-
-  // Prefer diagram/anatomy-named files (sorted: SVGs first)
-  const diagrams = allImages
-    .filter(isDiagramFile)
-    .sort((a, b) => {
-      const aIsSvg = a.toLowerCase().endsWith(".svg") ? -1 : 0;
-      const bIsSvg = b.toLowerCase().endsWith(".svg") ? -1 : 0;
-      return aIsSvg - bIsSvg;
-    });
-
-  for (const file of diagrams.slice(0, 6)) {
-    const img = await resolveWikiFile(file);
-    if (img) return img;
-  }
-
-  // Step 2: no labelled diagram found → fall back to article thumbnail
   try {
     const params = new URLSearchParams({
       action: "query",
@@ -96,11 +17,14 @@ async function fetchWikiImage(articleTitle: string): Promise<NoteImage | null> {
       origin: "*",
     });
     const resp = await fetch(`https://en.wikipedia.org/w/api.php?${params}`,
-      { signal: AbortSignal.timeout(8000) });
+      { signal: AbortSignal.timeout(6000) });
     if (!resp.ok) return null;
     const data = await resp.json();
     const pages = Object.values(data?.query?.pages || {}) as Record<string, unknown>[];
-    const page = pages[0] as { thumbnail?: { source?: string }; original?: { source?: string } } | undefined;
+    const page = pages[0] as {
+      thumbnail?: { source?: string };
+      original?: { source?: string };
+    } | undefined;
     if (!page) return null;
     const src = page.thumbnail?.source || page.original?.source;
     if (!src) return null;
