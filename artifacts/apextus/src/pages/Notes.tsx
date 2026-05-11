@@ -3,7 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { TREE, LINK_MAP, SR_INTERVALS, FREE_LIMITS } from "@/lib/data";
 import { mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
-import { fetchMedicalImage } from "@/lib/imageGen";
+import { fetchMedicalImage, getTopicDiagramQuery } from "@/lib/imageGen";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -19,35 +19,70 @@ export default function Notes() {
 
   const noteRef = useRef<HTMLDivElement>(null);
 
-  // Inject inline images: first try nb-img[data-q] placeholders (new notes),
-  // then fall back to injecting after key h2 sections (old cached notes).
+  // Inject inline educational diagram placeholders then resolve them.
   useEffect(() => {
     if (!noteRef.current || !noteHtml || !activeTopic) return;
     const root = noteRef.current;
 
-    // Collect explicit placeholders first
+    // Collect explicit placeholders added by the Mistral prompt (new notes)
     let placeholders = Array.from(root.querySelectorAll<HTMLElement>(".nb-img[data-q]"));
 
-    // All notes: always inject diagram placeholders after key h2 sections
-    // (nb-img placeholders from new notes will have been picked up above;
-    // for old cached notes this is the only source of images)
+    // Always inject additional diagram slots (old/cached notes have none;
+    // new notes benefit from extras positioned at known anatomical h2s)
     if (placeholders.length === 0) {
       const h2s = Array.from(root.querySelectorAll<HTMLElement>("h2"));
-      const targets: { kw: string; suffix: string }[] = [
-        { kw: "patofizyoloji", suffix: "anatomy physiology labeled diagram illustration" },
-        { kw: "laboratuvar",   suffix: "anatomy labeled diagram scheme" },
-        { kw: "tanı",          suffix: "anatomy diagram labeled illustration" },
-        { kw: "tedavi",        suffix: "mechanism pharmacology diagram illustration" },
+
+      // Keyword-based slots (works when h2 text contains the keyword)
+      const kwTargets: { kw: string; suffix: string }[] = [
+        { kw: "patofizyoloji", suffix: "anatomy physiology labeled diagram" },
+        { kw: "laboratuvar",   suffix: "anatomy labeled scheme" },
+        { kw: "tedavi",        suffix: "mechanism pharmacology diagram" },
       ];
-      for (const { kw, suffix } of targets) {
+      let injected = 0;
+      for (const { kw, suffix } of kwTargets) {
         const h2 = h2s.find(h => (h.textContent || "").toLowerCase().includes(kw));
         if (h2) {
           const div = document.createElement("div");
           div.className = "nb-img";
-          div.setAttribute("data-q", `${activeTopic.topic} ${suffix}`);
+          div.setAttribute("data-q", getTopicDiagramQuery(activeTopic.topic, activeTopic.cat, suffix));
           h2.insertAdjacentElement("afterend", div);
           placeholders.push(div);
+          injected++;
         }
+      }
+
+      // Fallback: if keyword matching found nothing, inject 3 diagrams at h2 indices
+      // so diagrams always appear regardless of heading text content
+      if (injected === 0 && h2s.length >= 2) {
+        const positions = [
+          Math.min(1, h2s.length - 1),                              // 2nd heading
+          Math.min(Math.floor(h2s.length / 2), h2s.length - 1),    // middle
+          Math.min(h2s.length - 1, h2s.length - 1),                 // last heading
+        ];
+        const suffixes = [
+          "anatomy labeled diagram",
+          "pathophysiology mechanism scheme",
+          "treatment pharmacology diagram",
+        ];
+        const seen = new Set<number>();
+        positions.forEach((idx, i) => {
+          if (seen.has(idx)) return;
+          seen.add(idx);
+          const div = document.createElement("div");
+          div.className = "nb-img";
+          div.setAttribute("data-q", getTopicDiagramQuery(activeTopic.topic, activeTopic.cat, suffixes[i]));
+          h2s[idx].insertAdjacentElement("afterend", div);
+          placeholders.push(div);
+        });
+      }
+
+      // Last resort: append 1 diagram to root if still empty
+      if (placeholders.length === 0) {
+        const div = document.createElement("div");
+        div.className = "nb-img";
+        div.setAttribute("data-q", getTopicDiagramQuery(activeTopic.topic, activeTopic.cat, "anatomy labeled diagram"));
+        root.insertAdjacentElement("afterbegin", div);
+        placeholders.push(div);
       }
     }
 
@@ -61,9 +96,13 @@ export default function Notes() {
         const img = await fetchMedicalImage(query);
         if (!noteRef.current?.contains(el)) return;
         if (img) {
+          const isAI = img.url.includes("pollinations.ai");
+          const srcLabel = isAI
+            ? "AI Destekli Eğitici Diyagram"
+            : "Wikipedia / Wikimedia Commons";
           el.innerHTML = `<figure class="inline-note-img">
-            <img src="${img.url}" alt="${img.caption}" loading="lazy" onerror="this.closest('figure').style.display='none'" />
-            <figcaption>${img.caption}<span class="img-src"> — Wikipedia / Wikimedia Commons</span></figcaption>
+            <img src="${img.url}" alt="${img.caption}" loading="eager" />
+            <figcaption>${img.caption}<span class="img-src"> — ${srcLabel}</span></figcaption>
           </figure>`;
         } else {
           el.style.display = "none";

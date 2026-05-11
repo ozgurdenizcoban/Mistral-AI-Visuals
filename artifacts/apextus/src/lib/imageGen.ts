@@ -136,15 +136,42 @@ async function searchWikiArticleImage(query: string): Promise<NoteImage | null> 
   }
 }
 
-/** Fetch the best educational diagram/image for a medical query.
- *  Priority: 1) Commons diagram (SVG labeled)  2) Wikipedia article
- *            3) Commons general search */
+/* ── Deterministic seed from query string ───────────────────── */
+function queryHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 999983;
+}
+
+/** Generate a labeled educational anatomy diagram via Pollinations.ai.
+ *  Always returns a valid image URL — no CORS issues, no search failures. */
+async function generateEducationalDiagram(query: string): Promise<NoteImage> {
+  const prompt = [
+    "medical educational labeled anatomy diagram",
+    query,
+    "clean white background, textbook illustration style,",
+    "color-coded with arrows and text labels, scientific infographic,",
+    "anatomical chart, no watermarks, no people, high detail",
+  ].join(" ");
+  const seed = queryHash(query);
+  const url =
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
+    `?width=900&height=580&nologo=true&model=flux&seed=${seed}`;
+  return { url, caption: query };
+}
+
+/** Get an English diagram query for any topic using TOPIC_MAP / CAT_FALLBACK.
+ *  Appends the given suffix so callers can customise (e.g. "anatomy diagram"). */
+export function getTopicDiagramQuery(topic: string, cat: string, suffix: string): string {
+  const media = TOPIC_MAP[topic] || CAT_FALLBACK[cat];
+  if (media) return `${media.query} ${suffix}`;
+  // Last-resort generic fallback
+  return `${cat} medical ${suffix}`.toLowerCase();
+}
+
+/** Generate an AI educational diagram (Pollinations.ai) — ALWAYS returns an image. */
 export async function fetchMedicalImage(query: string): Promise<NoteImage | null> {
-  const diagram = await searchEducationalDiagram(query);
-  if (diagram) return diagram;
-  const wiki = await searchWikiArticleImage(query);
-  if (wiki) return wiki;
-  return searchCommonsImage(query);
+  return generateEducationalDiagram(query);
 }
 
 /* ── Per-topic Wikipedia article & Commons query map ───────── */
