@@ -3,7 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { TREE, LINK_MAP, SR_INTERVALS, FREE_LIMITS } from "@/lib/data";
 import { mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
-import { generateNoteImages, fetchMedicalImage, NoteImage } from "@/lib/imageGen";
+import { fetchMedicalImage } from "@/lib/imageGen";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -17,22 +17,43 @@ export default function Notes() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [studyAdd, setStudyAdd] = useState(1);
 
-  // Images loaded separately so cached notes don't block on image fetch
-  const [noteImages, setNoteImages] = useState<NoteImage[]>([]);
-  const [imagesLoading, setImagesLoading] = useState(false);
   const noteRef = useRef<HTMLDivElement>(null);
 
-  // Inject inline images into nb-img placeholders after note renders
+  // Inject inline images: first try nb-img[data-q] placeholders (new notes),
+  // then fall back to injecting after key h2 sections (old cached notes).
   useEffect(() => {
-    if (!noteRef.current || !noteHtml) return;
-    const containers = Array.from(
-      noteRef.current.querySelectorAll<HTMLElement>(".nb-img[data-q]")
-    );
-    if (!containers.length) return;
-    containers.forEach(async (el) => {
+    if (!noteRef.current || !noteHtml || !activeTopic) return;
+    const root = noteRef.current;
+
+    // Collect explicit placeholders first
+    let placeholders = Array.from(root.querySelectorAll<HTMLElement>(".nb-img[data-q]"));
+
+    // Old cached notes: inject divs after Patofizyoloji / Laboratuvar / Tedavi h2s
+    if (placeholders.length === 0) {
+      const h2s = Array.from(root.querySelectorAll<HTMLElement>("h2"));
+      const targets: { kw: string; suffix: string }[] = [
+        { kw: "patofizyoloji", suffix: "pathophysiology mechanism diagram" },
+        { kw: "laboratuvar",   suffix: "radiology imaging diagnosis" },
+        { kw: "tedavi",        suffix: "treatment pharmacology" },
+      ];
+      for (const { kw, suffix } of targets) {
+        const h2 = h2s.find(h => (h.textContent || "").toLowerCase().includes(kw));
+        if (h2) {
+          const div = document.createElement("div");
+          div.className = "nb-img";
+          div.setAttribute("data-q", `${activeTopic.topic} ${suffix}`);
+          h2.insertAdjacentElement("afterend", div);
+          placeholders.push(div);
+        }
+      }
+    }
+
+    if (!placeholders.length) return;
+
+    placeholders.forEach(async (el) => {
       const query = el.getAttribute("data-q");
       if (!query) { el.style.display = "none"; return; }
-      el.innerHTML = `<div class="nb-img-skeleton"><span class="spin2"></span> Görsel yükleniyor...</div>`;
+      el.innerHTML = `<div class="nb-img-skeleton"><span class="spin2"></span>&nbsp;Görsel yükleniyor...</div>`;
       try {
         const img = await fetchMedicalImage(query);
         if (!noteRef.current?.contains(el)) return;
@@ -48,6 +69,7 @@ export default function Notes() {
         el.style.display = "none";
       }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteHtml]);
 
   useEffect(() => {
@@ -60,7 +82,6 @@ export default function Notes() {
 
   useEffect(() => {
     if (activeTopic) {
-      setNoteImages([]);
       loadNote(activeTopic.cat, activeTopic.icon, activeTopic.topic);
     }
   }, [activeTopic?.topic]);
@@ -76,27 +97,6 @@ export default function Notes() {
     saveState(s);
   }
 
-  async function fetchAndShowImages(cat: string, topic: string, savedHtml: string, savedLink: string, existingImgs: NoteImage[]) {
-    if (existingImgs.length > 0) {
-      setNoteImages(existingImgs);
-      return;
-    }
-    // No cached images → generate from Wikipedia
-    setImagesLoading(true);
-    try {
-      const imgs = await generateNoteImages(cat, topic);
-      setNoteImages(imgs);
-      if (imgs.length > 0) {
-        // Persist so next load is instant
-        fbSaveNote(topic, savedHtml, savedLink, imgs.map((i) => ({ url: i.url, caption: i.caption }))).catch(() => {});
-      }
-    } catch (_) {
-      // silently skip
-    } finally {
-      setImagesLoading(false);
-    }
-  }
-
   async function loadNote(cat: string, icon: string, topic: string) {
     if (noteCache[topic]) {
       setNoteHtml(noteCache[topic]);
@@ -109,20 +109,15 @@ export default function Notes() {
     }
     setNoteLoading(true);
     setNoteHtml(null);
-    setNoteImages([]);
     srMarkRead(topic);
 
     try {
       const cached = await fbGetNote(topic);
       if (cached?.html) {
-        // Show note immediately — images loaded separately
         const full = buildNoteHtml(cat, topic, cached.html, cached.linkHtml || "");
         noteCache[topic] = full;
         setNoteHtml(full);
         setNoteLoading(false);
-
-        const existingImgs: NoteImage[] = (cached.images || []).map((i) => ({ url: i.url, caption: i.caption }));
-        fetchAndShowImages(cat, topic, cached.html, cached.linkHtml || "", existingImgs);
         return;
       }
     } catch (_) {}
@@ -134,7 +129,6 @@ export default function Notes() {
       ]);
       const cleanHtml = cleanContent(html);
       const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
-
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
       setNoteHtml(full);
@@ -144,10 +138,7 @@ export default function Notes() {
         saveState(ns);
       }
       toast.success(`${topic} notu yüklendi`);
-
-      // Generate images in background — don't block note display
-      setNoteLoading(false);
-      fetchAndShowImages(cat, topic, cleanHtml, cleanLink, []);
+      fbSaveNote(topic, cleanHtml, cleanLink, []).catch(() => {});
     } catch (e) {
       toast.error("Not yüklenemedi: " + (e as Error).message);
       setNoteHtml(`<div style="color:var(--ac)">Yükleme hatası: ${(e as Error).message}</div>`);
@@ -181,7 +172,6 @@ export default function Notes() {
   async function refreshNote(cat: string, icon: string, topic: string) {
     delete noteCache[topic];
     await fbDeleteNote(topic);
-    setNoteImages([]);
     await loadNote(cat, icon, topic);
   }
 
@@ -282,7 +272,7 @@ export default function Notes() {
                     <span className="tag tag-red">{activeTopic.cat}</span>
                     <span className="tag tag-teal">TUS Odaklı</span>
                     <span className="tag tag-purple">🔗 Bağlantı Haritası</span>
-                    {(noteLoading || imagesLoading) && <span className="tag tag-gold">{noteLoading ? "Hazırlanıyor..." : "🔬 Klinik görseller yükleniyor..."}</span>}
+                    {noteLoading && <span className="tag tag-gold">Hazırlanıyor...</span>}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
@@ -320,31 +310,6 @@ export default function Notes() {
               </div>
             ) : noteHtml ? (
               <div className="card">
-                {/* Wikipedia images rendered as React JSX */}
-                {imagesLoading && (
-                  <div className="wiki-img-loading">
-                    <span className="wiki-img-loading-icon">🔬</span>
-                    <span>Klinik referans görseller yükleniyor<span className="loading-dots" /></span>
-                  </div>
-                )}
-                {noteImages.length > 0 && (
-                  <div className="note-images-grid" style={{ marginBottom: 20 }}>
-                    {noteImages.map((img, i) => (
-                      <figure key={i} className="note-image-figure">
-                        <img
-                          src={img.url}
-                          alt={img.caption}
-                          className="note-image"
-                          loading="lazy"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).closest("figure")!.style.display = "none"; }}
-                        />
-                        <figcaption className="note-image-caption">
-                          {img.caption} <span style={{ opacity: .6 }}>— Wikipedia / Wikimedia Commons</span>
-                        </figcaption>
-                      </figure>
-                    ))}
-                  </div>
-                )}
                 <div ref={noteRef} className="nb" dangerouslySetInnerHTML={{ __html: noteHtml }} />
               </div>
             ) : null}

@@ -149,11 +149,21 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
 
       const raw = await mistralJSON(prompt, 8000, 0.75);
       const parsed = parseJSON(raw) as { questions?: Q[] };
-      const qs: Q[] = (parsed?.questions || []).map((q) => ({
-        ...q,
-        opts: (q.opts || []).slice(0, 5),
-        ans: Math.min(Math.max(0, q.ans || 0), (q.opts?.length || 5) - 1),
-      })).slice(0, count);
+      const seenInSession = new Set<string>();
+      const qs: Q[] = (parsed?.questions || [])
+        .map((q) => ({
+          ...q,
+          opts: (q.opts || []).slice(0, 5),
+          ans: Math.min(Math.max(0, q.ans || 0), (q.opts?.length || 5) - 1),
+        }))
+        .filter((q) => {
+          // Deduplicate within this batch using vaka first 60 chars + soru first 40 chars
+          const key = (q.vaka || "").slice(0, 60) + "|" + (q.soru || "").slice(0, 40);
+          if (seenInSession.has(key)) return false;
+          seenInSession.add(key);
+          return true;
+        })
+        .slice(0, count);
 
       if (!qs.length) throw new Error("Sorular üretilemedi");
 

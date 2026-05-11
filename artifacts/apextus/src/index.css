@@ -310,8 +310,8 @@ body {
 }
 .inline-note-img img {
   width: 100%; display: block;
-  max-height: 300px; object-fit: cover;
-  background: var(--ink3);
+  max-height: 420px; object-fit: contain;
+  background: var(--ink2);
 }
 .inline-note-img figcaption {
   font-size: .68rem; color: var(--t2);
