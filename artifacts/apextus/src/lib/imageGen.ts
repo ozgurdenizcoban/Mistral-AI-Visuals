@@ -74,6 +74,42 @@ async function searchCommonsImage(query: string): Promise<NoteImage | null> {
   }
 }
 
+/* ── Wikipedia article search → best image ──────────────────── */
+async function searchWikiArticleImage(query: string): Promise<NoteImage | null> {
+  try {
+    const params = new URLSearchParams({
+      action: "query",
+      list: "search",
+      srsearch: query,
+      srnamespace: "0",
+      srlimit: "5",
+      format: "json",
+      origin: "*",
+    });
+    const resp = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const results = (data?.query?.search || []) as { title: string }[];
+    for (const r of results.slice(0, 3)) {
+      const img = await fetchWikiImage(r.title);
+      if (img) return { ...img, caption: r.title };
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Fetch the best medical image for an English search query.
+ *  1st: Wikipedia article search  2nd: Wikimedia Commons full-text */
+export async function fetchMedicalImage(query: string): Promise<NoteImage | null> {
+  const wiki = await searchWikiArticleImage(query);
+  if (wiki) return wiki;
+  return searchCommonsImage(query);
+}
+
 /* ── Per-topic Wikipedia article & Commons query map ───────── */
 interface TopicMedia {
   articles: string[];  // Wikipedia article titles → thumbnail

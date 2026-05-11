@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { TREE, LINK_MAP, SR_INTERVALS, FREE_LIMITS } from "@/lib/data";
 import { mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
-import { generateNoteImages, NoteImage } from "@/lib/imageGen";
+import { generateNoteImages, fetchMedicalImage, NoteImage } from "@/lib/imageGen";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -20,6 +20,35 @@ export default function Notes() {
   // Images loaded separately so cached notes don't block on image fetch
   const [noteImages, setNoteImages] = useState<NoteImage[]>([]);
   const [imagesLoading, setImagesLoading] = useState(false);
+  const noteRef = useRef<HTMLDivElement>(null);
+
+  // Inject inline images into nb-img placeholders after note renders
+  useEffect(() => {
+    if (!noteRef.current || !noteHtml) return;
+    const containers = Array.from(
+      noteRef.current.querySelectorAll<HTMLElement>(".nb-img[data-q]")
+    );
+    if (!containers.length) return;
+    containers.forEach(async (el) => {
+      const query = el.getAttribute("data-q");
+      if (!query) { el.style.display = "none"; return; }
+      el.innerHTML = `<div class="nb-img-skeleton"><span class="spin2"></span> Görsel yükleniyor...</div>`;
+      try {
+        const img = await fetchMedicalImage(query);
+        if (!noteRef.current?.contains(el)) return;
+        if (img) {
+          el.innerHTML = `<figure class="inline-note-img">
+            <img src="${img.url}" alt="${img.caption}" loading="lazy" onerror="this.closest('figure').style.display='none'" />
+            <figcaption>${img.caption}<span class="img-src"> — Wikipedia / Wikimedia Commons</span></figcaption>
+          </figure>`;
+        } else {
+          el.style.display = "none";
+        }
+      } catch (_) {
+        el.style.display = "none";
+      }
+    });
+  }, [noteHtml]);
 
   useEffect(() => {
     if (noteTarget) {
@@ -316,7 +345,7 @@ export default function Notes() {
                     ))}
                   </div>
                 )}
-                <div className="nb" dangerouslySetInnerHTML={{ __html: noteHtml }} />
+                <div ref={noteRef} className="nb" dangerouslySetInnerHTML={{ __html: noteHtml }} />
               </div>
             ) : null}
           </div>
@@ -357,6 +386,17 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - <div class="flowchart"><strong>KARAR AĞACI:</strong><br/>⬤ Başlangıç koşulu<br/>├─ [EVET] → sonuç<br/>└─ [HAYIR] → alternatif</div>
 - <div class="mnem"><strong>🧠 MNEM:</strong> ...</div>
 - <div class="score-box"><div class="score-title">SKOR</div>...</div>
+
+GÖRSEL YER TUTUCUSU KURALI (ÇOK ÖNEMLİ):
+- Her konuda, içerikle ilgili 2-3 adet görsel yer tutucu ekle.
+- Format: <div class="nb-img" data-q="INGILIZCE_ARAMA_TERIMI"></div>
+- Bunları şu bölümlerin h2'sinden HEMEN SONRA (içeriğin başında) yerleştir:
+  * 2. Patofizyoloji bölümünden sonra → mekanizma/patoloji görseli
+  * 7. Laboratuvar ve Görüntüleme bölümünden sonra → radyoloji/lab görseli
+  * 9. Tedavi bölümünden sonra → tedavi/ilaç mekanizması görseli (isteğe bağlı)
+- INGILIZCE_ARAMA_TERIMI: Wikipedia'da gerçek medikal görsel bulacak spesifik İngilizce terim
+  (örn: "heart failure echocardiogram", "pneumonia chest X-ray", "diabetes mellitus insulin mechanism", "cirrhosis liver histology")
+- Konuya özgün, gerçek tıbbi görsel getireceğinden emin ol.
 
 DİYAGRAM KURALI: Her konuda en az 1 adet tanı veya tedavi algoritması diyagramı (.algo veya .flowchart) yaz.
 

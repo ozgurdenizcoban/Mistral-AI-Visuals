@@ -297,6 +297,44 @@ body {
 }
 .wiki-img-loading-icon { font-size: 1.2rem; opacity: .6; }
 
+/* ===== INLINE NOTE IMAGES (injected via DOM after render) ===== */
+.nb-img {
+  margin: 18px 0;
+  clear: both;
+}
+.inline-note-img {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line2); border-radius: 12px; overflow: hidden;
+  background: var(--ink3); box-shadow: 0 4px 22px rgba(0,0,0,.32);
+  max-width: 520px; margin: 0 auto;
+}
+.inline-note-img img {
+  width: 100%; display: block;
+  max-height: 300px; object-fit: cover;
+  background: var(--ink3);
+}
+.inline-note-img figcaption {
+  font-size: .68rem; color: var(--t2);
+  padding: 9px 14px; line-height: 1.55;
+  font-family: "Syne", sans-serif;
+  border-top: 1px solid var(--line);
+  background: rgba(255,255,255,.02);
+}
+.img-src { opacity: .58; }
+.nb-img-skeleton {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 11px 16px;
+  background: var(--ink3); border: 1px solid var(--line);
+  border-radius: 10px; font-size: .75rem; color: var(--t3);
+  font-family: "Syne", sans-serif;
+}
+@keyframes spin2 { to { transform: rotate(360deg); } }
+.spin2 {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid var(--line2); border-top-color: var(--teal);
+  border-radius: 50%; animation: spin2 .8s linear infinite;
+}
+
 /* ===== QUIZ CLINICAL REFERENCE IMAGE ===== */
 .quiz-clinical-img {
   float: right;

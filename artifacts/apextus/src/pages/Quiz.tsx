@@ -450,8 +450,8 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
               }}
             />
             <div className="quiz-clinical-cap">
-              {imgState.caption}
-              <span style={{ opacity: .55, display: "block" }}>Wikipedia / Wikimedia Commons</span>
+              Klinik Referans
+              <span style={{ opacity: .55, display: "block" }}>Tıbbi Görsel</span>
             </div>
           </div>
         )}
