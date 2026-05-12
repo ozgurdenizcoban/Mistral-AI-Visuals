@@ -9,6 +9,7 @@ import Stats from "@/pages/Stats";
 import Review from "@/pages/Review";
 import Account from "@/pages/Account";
 import MockExam from "@/pages/MockExam";
+import TusScore from "@/pages/TusScore";
 
 export default function Layout() {
   const { user, loading, currentPage } = useApp();
@@ -32,6 +33,7 @@ export default function Layout() {
     dashboard: <Dashboard />,
     quiz: <Quiz />,
     mockexam: <MockExam />,
+    tusscore: <TusScore />,
     notes: <Notes />,
     stats: <Stats />,
     review: <Review />,

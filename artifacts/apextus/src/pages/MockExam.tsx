@@ -15,7 +15,7 @@ interface CatResult {
   correct: number;
 }
 
-type Phase = "setup" | "generating" | "quiz" | "result";
+type Phase = "setup" | "generating" | "quiz" | "review" | "result";
 
 const COUNTS = [10, 20, 30, 40];
 
@@ -37,15 +37,16 @@ export default function MockExam() {
   const [planHtml, setPlanHtml] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
 
+  /* ---- helpers ---- */
   function toggleCat(cat: string) {
     setSelectedCats((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
     );
   }
-
   function selectAll() { setSelectedCats(TREE.map((b) => b.cat)); }
   function clearAll() { setSelectedCats([]); }
 
+  /* ---- generate ---- */
   async function startExam() {
     if (selectedCats.length === 0) { toast.error("En az bir kategori seçin"); return; }
 
@@ -60,9 +61,7 @@ export default function MockExam() {
       const catIcon = TREE.find((b) => b.cat === cat)?.icon || "";
       setGenProgress({ done: i, total: selectedCats.length, cat: `${catIcon} ${cat}` });
 
-      const needed = i === selectedCats.length - 1
-        ? totalCount - allQs.length
-        : perCat;
+      const needed = i === selectedCats.length - 1 ? totalCount - allQs.length : perCat;
       if (needed <= 0) break;
 
       try {
@@ -74,11 +73,10 @@ export default function MockExam() {
         }
 
         const topics = (TREE.find((b) => b.cat === cat)?.topics || [])
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 4);
+          .sort(() => Math.random() - 0.5).slice(0, 4);
         const tiplar = soruTipleri.sort(() => Math.random() - 0.5).slice(0, Math.min(needed, soruTipleri.length));
 
-        const prompt = `Sen deneyimli bir TUS sınavı hazırlayıcısısın. Aşağıdaki konu(lar) için TUS sınavına çıkabilecek kalitede ${needed} soru üret.
+        const prompt = `Sen deneyimli bir TUS sınavı hazırlayıcısısın. ${cat} kategorisinden TUS sınavına çıkabilecek kalitede ${needed} soru üret.
 
 KATEGORİ: ${cat}
 KONULAR: ${topics.join(", ")}
@@ -93,9 +91,9 @@ JSON formatı (başka hiçbir şey yazma):
     {
       "vaka": "65 yaşında erkek hasta...",
       "soru": "Bu hastanın en olası tanısı nedir?",
-      "opts": ["A seçeneği", "B seçeneği", "C seçeneği", "D seçeneği", "E seçeneği"],
+      "opts": ["A", "B", "C", "D", "E"],
       "ans": 2,
-      "exp": "Doğru cevap B'dir çünkü...",
+      "exp": "Doğru cevap B çünkü...",
       "cat": "${cat}",
       "diff": "${diff}",
       "tags": ["${topics[0]}"]
@@ -103,7 +101,7 @@ JSON formatı (başka hiçbir şey yazma):
   ]
 }
 
-Cevap indeksi 0-4 arasında olmalı. ${needed} adet soru üret.`;
+Cevap indeksi 0-4. ${needed} soru üret.`;
 
         const raw = await mistralJSON(prompt, 8000, 0.75);
         const parsed = parseJSON(raw) as { questions?: Q[] };
@@ -113,25 +111,16 @@ Cevap indeksi 0-4 arasında olmalı. ${needed} adet soru üret.`;
 
         if (qs.length) {
           allQs.push(...qs);
-          fbSaveQuestions(cat, diff, qs)
-            .then((ids) => { if (ids.length) markSeenQ(ids); })
-            .catch(() => {});
+          fbSaveQuestions(cat, diff, qs).then((ids) => { if (ids.length) markSeenQ(ids); }).catch(() => {});
         }
-      } catch (e) {
-        toast.error(`${cat} soruları yüklenemedi, atlanıyor`);
+      } catch {
+        toast.error(`${cat} soruları atlandı`);
       }
     }
 
-    setGenProgress({ done: selectedCats.length, total: selectedCats.length, cat: "" });
+    if (allQs.length === 0) { toast.error("Hiç soru üretilemedi"); setPhase("setup"); return; }
 
-    if (allQs.length === 0) {
-      toast.error("Hiç soru üretilemedi");
-      setPhase("setup");
-      return;
-    }
-
-    const shuffled = allQs.sort(() => Math.random() - 0.5);
-    setQuestions(shuffled);
+    setQuestions(allQs.sort(() => Math.random() - 0.5));
     setCurrent(0);
     setSelected(null);
     setAnswered(false);
@@ -140,6 +129,7 @@ Cevap indeksi 0-4 arasında olmalı. ${needed} adet soru üret.`;
     setPhase("quiz");
   }
 
+  /* ---- quiz interactions ---- */
   function handleSelect(idx: number) {
     if (answered) return;
     setSelected(idx);
@@ -166,28 +156,22 @@ Cevap indeksi 0-4 arasında olmalı. ${needed} adet soru üret.`;
       newState.lastDate = today;
     }
     saveState(newState);
-
     setAnswers((prev) => [...prev, { q, sel: idx, correct }]);
   }
 
   function handleNext() {
-    if (current + 1 >= questions.length) {
-      setPhase("result");
-      return;
-    }
+    if (current + 1 >= questions.length) { setPhase("result"); return; }
     setCurrent((v) => v + 1);
     setSelected(null);
     setAnswered(false);
   }
 
+  /* ---- results ---- */
   function getCatResults(): CatResult[] {
     const map: Record<string, CatResult> = {};
     answers.forEach(({ q, correct }) => {
       const cat = q.cat || "Genel";
-      if (!map[cat]) {
-        const icon = TREE.find((b) => b.cat === cat)?.icon || "📋";
-        map[cat] = { cat, icon, total: 0, correct: 0 };
-      }
+      if (!map[cat]) { map[cat] = { cat, icon: TREE.find((b) => b.cat === cat)?.icon || "📋", total: 0, correct: 0 }; }
       map[cat].total += 1;
       if (correct) map[cat].correct += 1;
     });
@@ -198,56 +182,59 @@ Cevap indeksi 0-4 arasında olmalı. ${needed} adet soru üret.`;
     setPlanLoading(true);
     try {
       const catResults = getCatResults();
-      const weakCats = catResults.filter((r) => r.total > 0 && (r.correct / r.total) < 0.7);
-      const overallScore = answers.length > 0
-        ? Math.round((answers.filter((a) => a.correct).length / answers.length) * 100)
-        : 0;
+      const overallScore = answers.length > 0 ? Math.round((answers.filter((a) => a.correct).length / answers.length) * 100) : 0;
+      const catSummary = catResults.map((r) => `${r.cat}: ${r.correct}/${r.total} (%${Math.round((r.correct / r.total) * 100)})`).join("\n");
+      const weakCats = catResults.filter((r) => (r.correct / r.total) < 0.6);
+      const medCats = catResults.filter((r) => (r.correct / r.total) >= 0.6 && (r.correct / r.total) < 0.8);
+      const strongCats = catResults.filter((r) => (r.correct / r.total) >= 0.8);
 
-      const catSummary = catResults
-        .map((r) => `${r.cat}: ${r.correct}/${r.total} (${Math.round((r.correct / r.total) * 100)}%)`)
-        .join("\n");
+      const prompt = `TUS hazırlık uzmanısın. Aşağıdaki deneme sınavı sonuçlarına göre kişiselleştirilmiş haftalık çalışma planı oluştur.
 
-      const prompt = `TUS hazırlık uzmanı olarak aşağıdaki deneme sınavı sonuçlarına göre kişiselleştirilmiş bir çalışma planı oluştur.
+GENEL BAŞARI: %${overallScore} (${answers.filter((a) => a.correct).length}/${answers.length})
+ZORLUK: ${diff}
+KATEGORİ SONUÇLARI:\n${catSummary}
 
-GENEL BAŞARI: %${overallScore} (${answers.filter((a) => a.correct).length}/${answers.length} doğru)
-ZORLUK SEVİYESİ: ${diff}
+Türkçe yaz. Aşağıdaki HTML yapısını AYNEN kullan, içerikleri doldur:
 
-KATEGORİ SONUÇLARI:
-${catSummary}
-
-ZAYIF KATEGORİLER: ${weakCats.map((c) => c.cat).join(", ") || "Yok (tebrikler!)"}
-
-Aşağıdaki HTML formatında çalışma planı oluştur. Türkçe yaz. Gerçekçi ve klinik detaylarla açıkla:
-
-<div class="tip"><strong>🎯 Genel Değerlendirme:</strong> [Genel performans yorumu]</div>
-<div class="tip" style="border-left-color:var(--ac)"><strong>🔴 Öncelikli Konular (Bu Hafta):</strong>
-<ul>
-  <li><strong>[Kategori]:</strong> [Hangi konulara odaklan, neden eksik, nasıl çalış]</li>
-</ul>
-</div>
-<div class="tip" style="border-left-color:var(--gold)"><strong>🟡 Güçlendirilecek Konular (2. Hafta):</strong>
-<ul>
-  <li><strong>[Kategori]:</strong> [Tavsiye]</li>
-</ul>
-</div>
-<div class="tip" style="border-left-color:var(--teal)"><strong>✅ Güçlü Yönler:</strong> [Başarılı kategoriler + pekiştirme önerileri]</div>
-<div class="tip" style="border-left-color:var(--purple)"><strong>📅 Haftalık Plan:</strong>
-<ul>
-  <li><strong>Pazartesi-Salı:</strong> ...</li>
-  <li><strong>Çarşamba-Perşembe:</strong> ...</li>
-  <li><strong>Cuma-Cumartesi:</strong> ...</li>
-  <li><strong>Pazar:</strong> Deneme tekrarı + eksik konular</li>
-</ul>
+<div class="plan-summary">
+  <div class="plan-summary-card plan-card-red">
+    <div class="plan-card-icon">🔴</div>
+    <div class="plan-card-label">Öncelikli</div>
+    <div class="plan-card-cats">${weakCats.map((c) => c.cat).join(" · ") || "—"}</div>
+  </div>
+  <div class="plan-summary-card plan-card-gold">
+    <div class="plan-card-icon">🟡</div>
+    <div class="plan-card-label">Geliştirilecek</div>
+    <div class="plan-card-cats">${medCats.map((c) => c.cat).join(" · ") || "—"}</div>
+  </div>
+  <div class="plan-summary-card plan-card-teal">
+    <div class="plan-card-icon">✅</div>
+    <div class="plan-card-label">Güçlü</div>
+    <div class="plan-card-cats">${strongCats.map((c) => c.cat).join(" · ") || "—"}</div>
+  </div>
 </div>
 
-Sadece HTML yaz, başka açıklama yapma.`;
+<p style="font-size:.82rem;color:var(--t2);margin:16px 0 12px">[2-3 cümle genel değerlendirme ve strateji]</p>
+
+<table class="plan-table">
+  <thead><tr><th>Gün</th><th>Odak Konu</th><th>Çalışma Şekli</th><th>Hedef</th></tr></thead>
+  <tbody>
+    <tr><td>Pazartesi</td><td>[Zayıf kategori/konu]</td><td>[Nasıl çalışılacak]</td><td>[Somut hedef]</td></tr>
+    <tr><td>Salı</td><td>...</td><td>...</td><td>...</td></tr>
+    <tr><td>Çarşamba</td><td>...</td><td>...</td><td>...</td></tr>
+    <tr><td>Perşembe</td><td>...</td><td>...</td><td>...</td></tr>
+    <tr><td>Cuma</td><td>...</td><td>...</td><td>...</td></tr>
+    <tr><td>Cumartesi</td><td>...</td><td>...</td><td>...</td></tr>
+    <tr><td>Pazar</td><td>Tekrar + Deneme</td><td>Haftalık konuları gözden geçir, yeni deneme çöz</td><td>%80 hedef</td></tr>
+  </tbody>
+</table>
+
+<div class="tip" style="margin-top:16px;border-left-color:var(--purple)"><strong>💡 TUS İpucu:</strong> [Bu sınav profiline özel pratik TUS stratejisi]</div>
+
+Sadece HTML yaz.`;
 
       const raw = await mistralText(prompt, 4000, 0.7);
-      const cleaned = raw
-        .replace(/^```(?:html)?\s*/i, "")
-        .replace(/\s*```\s*$/, "")
-        .trim();
-      setPlanHtml(cleaned);
+      setPlanHtml(raw.replace(/^```(?:html)?\s*/i, "").replace(/\s*```\s*$/, "").trim());
     } catch (e) {
       toast.error("Plan oluşturulamadı: " + (e as Error).message);
     } finally {
@@ -258,6 +245,7 @@ Sadece HTML yaz, başka açıklama yapma.`;
   const totalScore = answers.filter((a) => a.correct).length;
   const pct = answers.length > 0 ? Math.round((totalScore / answers.length) * 100) : 0;
 
+  /* ================================================================ SETUP */
   if (phase === "setup") {
     return (
       <div style={{ maxWidth: 720 }}>
@@ -265,10 +253,9 @@ Sadece HTML yaz, başka açıklama yapma.`;
           Deneme Sınavı
         </div>
         <div style={{ color: "var(--t2)", fontSize: ".82rem", marginBottom: 28 }}>
-          Çoklu kategoriden gerçekçi TUS soruları — sonuçlara göre AI çalışma planı al
+          Çoklu kategoriden TUS tarzı sorular — bitince AI çalışma planı al
         </div>
 
-        {/* Category selection */}
         <div className="card" style={{ marginBottom: 18, padding: 20 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <div style={{ fontSize: ".85rem", fontWeight: 700, color: "var(--cream)" }}>Kategoriler</div>
@@ -281,19 +268,15 @@ Sadece HTML yaz, başka açıklama yapma.`;
             {TREE.map((b) => {
               const on = selectedCats.includes(b.cat);
               return (
-                <button
-                  key={b.cat}
-                  onClick={() => toggleCat(b.cat)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    padding: "8px 12px", borderRadius: 9, border: "none", cursor: "pointer",
-                    background: on ? "rgba(232,83,74,.15)" : "rgba(255,255,255,.04)",
-                    color: on ? "var(--ac)" : "var(--t2)",
-                    fontFamily: "Syne, sans-serif", fontSize: ".78rem", fontWeight: on ? 700 : 500,
-                    textAlign: "left", transition: "all .12s",
-                    outline: on ? "1px solid rgba(232,83,74,.35)" : "1px solid transparent",
-                  }}
-                >
+                <button key={b.cat} onClick={() => toggleCat(b.cat)} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 12px", borderRadius: 9, border: "none", cursor: "pointer",
+                  background: on ? "rgba(232,83,74,.15)" : "rgba(255,255,255,.04)",
+                  color: on ? "var(--ac)" : "var(--t2)",
+                  fontFamily: "Syne, sans-serif", fontSize: ".78rem", fontWeight: on ? 700 : 500,
+                  textAlign: "left", transition: "all .12s",
+                  outline: on ? "1px solid rgba(232,83,74,.35)" : "1px solid transparent",
+                }}>
                   <span>{b.icon}</span>
                   <span style={{ flex: 1 }}>{b.cat}</span>
                   {on && <span style={{ fontSize: ".65rem", color: "var(--ac)" }}>✓</span>}
@@ -306,26 +289,18 @@ Sadece HTML yaz, başka açıklama yapma.`;
           </div>
         </div>
 
-        {/* Settings */}
         <div className="card" style={{ marginBottom: 24, padding: 20 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
             <div>
               <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", marginBottom: 10 }}>Toplam Soru</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {COUNTS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setTotalCount(c)}
-                    style={{
-                      padding: "6px 16px", borderRadius: 8, border: "none", cursor: "pointer",
-                      background: totalCount === c ? "var(--ac)" : "rgba(255,255,255,.07)",
-                      color: totalCount === c ? "#fff" : "var(--t2)",
-                      fontFamily: "Syne, sans-serif", fontSize: ".8rem", fontWeight: 700,
-                      transition: "all .12s",
-                    }}
-                  >
-                    {c}
-                  </button>
+                  <button key={c} onClick={() => setTotalCount(c)} style={{
+                    padding: "6px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+                    background: totalCount === c ? "var(--ac)" : "rgba(255,255,255,.07)",
+                    color: totalCount === c ? "#fff" : "var(--t2)",
+                    fontFamily: "Syne, sans-serif", fontSize: ".8rem", fontWeight: 700, transition: "all .12s",
+                  }}>{c}</button>
                 ))}
               </div>
             </div>
@@ -333,19 +308,12 @@ Sadece HTML yaz, başka açıklama yapma.`;
               <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", marginBottom: 10 }}>Zorluk</div>
               <div style={{ display: "flex", gap: 8 }}>
                 {["Kolay", "Orta", "Zor"].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setDiff(d)}
-                    style={{
-                      padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                      background: diff === d ? "var(--teal)" : "rgba(255,255,255,.07)",
-                      color: diff === d ? "#fff" : "var(--t2)",
-                      fontFamily: "Syne, sans-serif", fontSize: ".8rem", fontWeight: 700,
-                      transition: "all .12s",
-                    }}
-                  >
-                    {d}
-                  </button>
+                  <button key={d} onClick={() => setDiff(d)} style={{
+                    padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                    background: diff === d ? "var(--teal)" : "rgba(255,255,255,.07)",
+                    color: diff === d ? "#fff" : "var(--t2)",
+                    fontFamily: "Syne, sans-serif", fontSize: ".8rem", fontWeight: 700, transition: "all .12s",
+                  }}>{d}</button>
                 ))}
               </div>
             </div>
@@ -364,6 +332,7 @@ Sadece HTML yaz, başka açıklama yapma.`;
     );
   }
 
+  /* ============================================================ GENERATING */
   if (phase === "generating") {
     const pctDone = genProgress.total > 0 ? Math.round((genProgress.done / genProgress.total) * 100) : 0;
     return (
@@ -375,10 +344,7 @@ Sadece HTML yaz, başka açıklama yapma.`;
         </div>
         <div style={{ width: 260, marginTop: 18 }}>
           <div className="progress-bar" style={{ height: 8, borderRadius: 6 }}>
-            <div
-              className="progress-fill"
-              style={{ width: `${pctDone}%`, background: "var(--teal)", transition: "width .5s" }}
-            />
+            <div className="progress-fill" style={{ width: `${pctDone}%`, background: "var(--teal)", transition: "width .5s" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "var(--t3)", marginTop: 6 }}>
             <span>{genProgress.done}/{genProgress.total} kategori</span>
@@ -389,68 +355,42 @@ Sadece HTML yaz, başka açıklama yapma.`;
     );
   }
 
+  /* ================================================================= QUIZ */
   if (phase === "quiz") {
     const q = questions[current];
     const opts = ["A", "B", "C", "D", "E"];
-    const progress = Math.round(((current + (answered ? 1 : 0)) / questions.length) * 100);
+    const progress = Math.round(((current) / questions.length) * 100);
 
     return (
       <div style={{ maxWidth: 740 }}>
-        {/* Progress bar */}
-        <div style={{ marginBottom: 18 }}>
+        {/* Progress */}
+        <div style={{ marginBottom: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", color: "var(--t2)", marginBottom: 6 }}>
             <span style={{ fontFamily: "Syne, sans-serif", fontWeight: 700 }}>
               {current + 1} / {questions.length}
             </span>
-            <span style={{ color: "var(--teal)", fontWeight: 700 }}>
-              {answers.filter((a) => a.correct).length} doğru · {answers.filter((a) => !a.correct).length} yanlış
+            <span style={{ fontFamily: "Syne, sans-serif", fontWeight: 600, color: "var(--t3)" }}>
+              {diff} · {TREE.find((b) => b.cat === q.cat)?.icon} {q.cat}
             </span>
           </div>
-          <div className="progress-bar" style={{ height: 6, borderRadius: 4 }}>
-            <div
-              className="progress-fill"
-              style={{ width: `${progress}%`, background: "linear-gradient(90deg,var(--teal),var(--blue))", transition: "width .3s" }}
-            />
+          <div className="progress-bar" style={{ height: 5, borderRadius: 4 }}>
+            <div className="progress-fill" style={{ width: `${progress}%`, background: "linear-gradient(90deg,var(--teal),var(--blue))", transition: "width .3s" }} />
           </div>
-        </div>
-
-        {/* Category tag */}
-        <div style={{ marginBottom: 14 }}>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            background: "rgba(45,212,191,.12)", border: "1px solid rgba(45,212,191,.22)",
-            color: "var(--teal)", fontSize: ".7rem", fontWeight: 800,
-            padding: "3px 10px", borderRadius: 20, fontFamily: "Syne, sans-serif",
-          }}>
-            {TREE.find((b) => b.cat === q.cat)?.icon || "📋"} {q.cat || "Genel"}
-          </span>
         </div>
 
         {/* Case */}
         <div className="card" style={{ padding: 20, marginBottom: 16, borderLeft: "3px solid var(--blue)" }}>
-          <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--blue)", textTransform: "uppercase", marginBottom: 8, letterSpacing: ".06em" }}>
-            Klinik Vaka
-          </div>
+          <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--blue)", textTransform: "uppercase", marginBottom: 8, letterSpacing: ".06em" }}>Klinik Vaka</div>
           <div style={{ fontSize: ".88rem", color: "var(--text)", lineHeight: 1.65 }}>{q.vaka}</div>
         </div>
 
         {/* Question */}
-        <div style={{ fontSize: ".95rem", fontWeight: 700, color: "var(--cream)", marginBottom: 16, lineHeight: 1.5 }}>
-          {q.soru}
-        </div>
+        <div style={{ fontSize: ".95rem", fontWeight: 700, color: "var(--cream)", marginBottom: 16, lineHeight: 1.5 }}>{q.soru}</div>
 
-        {/* Options */}
+        {/* Options — no color feedback during quiz */}
         <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 20 }}>
           {(q.opts || []).map((opt, i) => {
-            let bg = "rgba(255,255,255,.05)";
-            let color = "var(--text)";
-            let border = "1px solid var(--line)";
-            if (answered) {
-              if (i === q.ans) { bg = "rgba(16,185,129,.15)"; color = "var(--green)"; border = "1px solid rgba(16,185,129,.4)"; }
-              else if (i === selected && i !== q.ans) { bg = "rgba(232,83,74,.12)"; color = "var(--ac)"; border = "1px solid rgba(232,83,74,.3)"; }
-            } else if (selected === i) {
-              bg = "rgba(45,212,191,.12)"; color = "var(--teal)"; border = "1px solid rgba(45,212,191,.3)";
-            }
+            const isSelected = selected === i;
             return (
               <button
                 key={i}
@@ -458,35 +398,20 @@ Sadece HTML yaz, başka açıklama yapma.`;
                 disabled={answered}
                 style={{
                   display: "flex", alignItems: "flex-start", gap: 12,
-                  padding: "12px 16px", borderRadius: 10, border, cursor: answered ? "default" : "pointer",
-                  background: bg, color, fontFamily: "Syne, sans-serif", fontSize: ".84rem",
-                  fontWeight: 500, textAlign: "left", transition: "all .12s",
+                  padding: "12px 16px", borderRadius: 10, cursor: answered ? "default" : "pointer",
+                  border: isSelected ? "1px solid rgba(45,212,191,.5)" : "1px solid var(--line)",
+                  background: isSelected ? "rgba(45,212,191,.1)" : "rgba(255,255,255,.04)",
+                  color: isSelected ? "var(--teal)" : "var(--text)",
+                  fontFamily: "Syne, sans-serif", fontSize: ".84rem", fontWeight: isSelected ? 700 : 500,
+                  textAlign: "left", transition: "all .12s",
                 }}
               >
                 <span style={{ fontWeight: 900, flexShrink: 0, width: 18, marginTop: 1 }}>{opts[i]}.</span>
                 <span style={{ lineHeight: 1.5 }}>{opt}</span>
-                {answered && i === q.ans && <span style={{ marginLeft: "auto", flexShrink: 0 }}>✓</span>}
               </button>
             );
           })}
         </div>
-
-        {/* Explanation */}
-        {answered && (
-          <div
-            className="card"
-            style={{
-              padding: "14px 18px", marginBottom: 16,
-              borderLeft: `3px solid ${selected === q.ans ? "var(--green)" : "var(--ac)"}`,
-              background: selected === q.ans ? "rgba(16,185,129,.07)" : "rgba(232,83,74,.07)",
-            }}
-          >
-            <div style={{ fontSize: ".72rem", fontWeight: 800, color: selected === q.ans ? "var(--green)" : "var(--ac)", textTransform: "uppercase", marginBottom: 6, letterSpacing: ".05em" }}>
-              {selected === q.ans ? "✓ Doğru" : "✗ Yanlış"}
-            </div>
-            <div style={{ fontSize: ".83rem", color: "var(--text)", lineHeight: 1.6 }}>{q.exp}</div>
-          </div>
-        )}
 
         {answered && (
           <button
@@ -501,6 +426,53 @@ Sadece HTML yaz, başka açıklama yapma.`;
     );
   }
 
+  /* =============================================================== REVIEW */
+  if (phase === "review") {
+    const opts = ["A", "B", "C", "D", "E"];
+    return (
+      <div style={{ maxWidth: 740 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+          <button className="btn btn-ghost sm" onClick={() => setPhase("result")}>← Sonuçlara Dön</button>
+          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.1rem", fontWeight: 900, color: "var(--cream)" }}>Soru İnceleme</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {answers.map(({ q, sel, correct }, idx) => (
+            <div key={idx} className="card" style={{ padding: 18, borderLeft: `3px solid ${correct ? "var(--green)" : "var(--ac)"}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: ".7rem", fontWeight: 800, color: "var(--t3)", fontFamily: "Syne, sans-serif" }}>S{idx + 1}</span>
+                <span style={{ fontSize: ".68rem", background: correct ? "rgba(16,185,129,.15)" : "rgba(232,83,74,.12)", color: correct ? "var(--green)" : "var(--ac)", padding: "2px 8px", borderRadius: 20, fontWeight: 800, fontFamily: "Syne, sans-serif" }}>
+                  {correct ? "✓ Doğru" : "✗ Yanlış"}
+                </span>
+                <span style={{ fontSize: ".68rem", color: "var(--t3)", marginLeft: "auto", fontFamily: "Syne, sans-serif" }}>{q.cat}</span>
+              </div>
+              <div style={{ fontSize: ".8rem", color: "var(--t2)", lineHeight: 1.5, marginBottom: 8 }}>{q.vaka}</div>
+              <div style={{ fontSize: ".84rem", fontWeight: 700, color: "var(--cream)", marginBottom: 10 }}>{q.soru}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+                {(q.opts || []).map((opt, i) => (
+                  <div key={i} style={{
+                    display: "flex", gap: 9, padding: "7px 12px", borderRadius: 8,
+                    background: i === q.ans ? "rgba(16,185,129,.12)" : i === sel && i !== q.ans ? "rgba(232,83,74,.08)" : "transparent",
+                    color: i === q.ans ? "var(--green)" : i === sel && i !== q.ans ? "var(--ac)" : "var(--t2)",
+                    fontSize: ".8rem", fontWeight: i === q.ans ? 700 : 400,
+                  }}>
+                    <span style={{ fontWeight: 800, flexShrink: 0 }}>{opts[i]}.</span>
+                    <span>{opt}</span>
+                    {i === q.ans && <span style={{ marginLeft: "auto" }}>← Doğru</span>}
+                    {i === sel && i !== q.ans && <span style={{ marginLeft: "auto" }}>← Seçiminiz</span>}
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: ".78rem", color: "var(--t2)", lineHeight: 1.55, background: "rgba(255,255,255,.04)", padding: "10px 12px", borderRadius: 8 }}>
+                {q.exp}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* =============================================================== RESULT */
   if (phase === "result") {
     const catResults = getCatResults();
     const wrongCount = answers.filter((a) => !a.correct).length;
@@ -508,7 +480,6 @@ Sadece HTML yaz, başka açıklama yapma.`;
 
     return (
       <div style={{ maxWidth: 720 }}>
-        {/* Header */}
         <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.5rem", fontWeight: 900, color: "var(--cream)", marginBottom: 4 }}>
           Sınav Sonucu
         </div>
@@ -516,7 +487,7 @@ Sadece HTML yaz, başka açıklama yapma.`;
 
         {/* Score */}
         <div className="card" style={{ padding: 24, marginBottom: 20, textAlign: "center" }}>
-          <div style={{ fontSize: "3.2rem", fontWeight: 900, fontFamily: "Playfair Display, serif", color: scoreColor, lineHeight: 1 }}>
+          <div style={{ fontSize: "3.5rem", fontWeight: 900, fontFamily: "Playfair Display, serif", color: scoreColor, lineHeight: 1 }}>
             %{pct}
           </div>
           <div style={{ color: "var(--t2)", fontSize: ".85rem", marginTop: 8 }}>
@@ -524,45 +495,47 @@ Sadece HTML yaz, başka açıklama yapma.`;
           </div>
           <div style={{ marginTop: 16 }}>
             <div className="progress-bar" style={{ height: 10, borderRadius: 6 }}>
-              <div
-                className="progress-fill"
-                style={{ width: `${pct}%`, background: scoreColor, transition: "width 1s" }}
-              />
+              <div className="progress-fill" style={{ width: `${pct}%`, background: scoreColor, transition: "width 1s" }} />
             </div>
           </div>
           <div style={{ marginTop: 12, fontSize: ".82rem", fontWeight: 700, color: scoreColor }}>
-            {pct >= 70 ? "🎉 Harika! Çok iyi bir sonuç." : pct >= 50 ? "👍 İyi gidiyorsunuz. Zayıf konulara odaklanın." : "📚 Tekrara ihtiyaç var. Çalışma planı oluşturun."}
+            {pct >= 70 ? "🎉 Harika performans!" : pct >= 50 ? "👍 İyi gidiyorsunuz — zayıf konulara odaklanın." : "📚 Tekrara ihtiyaç var — çalışma planı oluşturun."}
           </div>
         </div>
 
-        {/* Category breakdown */}
+        {/* Category breakdown — table */}
         <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-          <div style={{ fontSize: ".85rem", fontWeight: 700, color: "var(--cream)", marginBottom: 16 }}>
+          <div style={{ fontSize: ".85rem", fontWeight: 700, color: "var(--cream)", marginBottom: 14 }}>
             Kategori Analizi
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {catResults.map((r) => {
-              const p = r.total > 0 ? Math.round((r.correct / r.total) * 100) : 0;
-              const col = p >= 70 ? "var(--green)" : p >= 50 ? "var(--gold)" : "var(--ac)";
-              return (
-                <div key={r.cat}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: ".8rem", color: "var(--text)" }}>
+          <table className="plan-table" style={{ marginBottom: 0 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>Kategori</th>
+                <th>Doğru/Toplam</th>
+                <th>Başarı</th>
+                <th>Durum</th>
+              </tr>
+            </thead>
+            <tbody>
+              {catResults.map((r) => {
+                const p = r.total > 0 ? Math.round((r.correct / r.total) * 100) : 0;
+                const col = p >= 70 ? "var(--green)" : p >= 50 ? "var(--gold)" : "var(--ac)";
+                const badge = p >= 70 ? "✅ Güçlü" : p >= 50 ? "🟡 Orta" : "🔴 Zayıf";
+                return (
+                  <tr key={r.cat}>
+                    <td style={{ display: "flex", alignItems: "center", gap: 7 }}>
                       <span>{r.icon}</span>
                       <span style={{ fontWeight: 600 }}>{r.cat}</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: ".72rem", color: "var(--t2)" }}>{r.correct}/{r.total}</span>
-                      <span style={{ fontSize: ".78rem", fontWeight: 800, color: col, minWidth: 34, textAlign: "right" }}>%{p}</span>
-                    </div>
-                  </div>
-                  <div className="progress-bar" style={{ height: 5, borderRadius: 4 }}>
-                    <div className="progress-fill" style={{ width: `${p}%`, background: col }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                    </td>
+                    <td style={{ textAlign: "center", color: "var(--t2)" }}>{r.correct}/{r.total}</td>
+                    <td style={{ textAlign: "center", fontWeight: 800, color: col }}>%{p}</td>
+                    <td style={{ textAlign: "center", fontSize: ".72rem" }}>{badge}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         {/* AI Study Plan */}
@@ -573,7 +546,7 @@ Sadece HTML yaz, başka açıklama yapma.`;
           {!planHtml && !planLoading && (
             <>
               <div style={{ fontSize: ".78rem", color: "var(--t2)", marginBottom: 14 }}>
-                Sınav sonuçlarına göre kişiselleştirilmiş çalışma planı oluşturun
+                Sınav sonuçlarınıza özel haftalık program + strateji önerileri
               </div>
               <button className="btn btn-primary" onClick={generateStudyPlan}>
                 ✨ Çalışma Planı Oluştur
@@ -582,33 +555,23 @@ Sadece HTML yaz, başka açıklama yapma.`;
           )}
           {planLoading && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", color: "var(--teal)", fontSize: ".82rem", fontWeight: 600 }}>
-              <span className="spin" />
-              Plan hazırlanıyor, yaklaşık 30 saniye<span className="loading-dots" />
+              <span className="spin" />Plan hazırlanıyor<span className="loading-dots" />
             </div>
           )}
           {planHtml && (
-            <div
-              className="note-content"
-              dangerouslySetInnerHTML={{ __html: planHtml }}
-            />
+            <div className="note-content" dangerouslySetInnerHTML={{ __html: planHtml }} />
           )}
         </div>
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 12 }}>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1, justifyContent: "center" }}
-            onClick={() => { setPhase("setup"); setPlanHtml(null); }}
-          >
+          <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }}
+            onClick={() => { setPhase("setup"); setPlanHtml(null); }}>
             ↺ Yeni Deneme
           </button>
-          <button
-            className="btn btn-ghost"
-            style={{ flex: 1, justifyContent: "center" }}
-            onClick={() => { setPhase("quiz"); setCurrent(0); setAnswered(false); setSelected(null); }}
-          >
-            📖 Soruları Tekrar İncele
+          <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }}
+            onClick={() => setPhase("review")}>
+            📖 Soruları İncele
           </button>
         </div>
       </div>

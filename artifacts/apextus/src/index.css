@@ -757,3 +757,69 @@ body {
   text-orientation: mixed;
   letter-spacing: .08em;
 }
+
+/* ── Plan table (MockExam study plan + TUS score) ───────────────── */
+.plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: Syne, sans-serif;
+  font-size: .78rem;
+  margin-bottom: 16px;
+}
+.plan-table thead tr {
+  border-bottom: 2px solid var(--line2);
+}
+.plan-table th {
+  padding: 8px 12px;
+  color: var(--t3);
+  font-size: .65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  text-align: center;
+  white-space: nowrap;
+}
+.plan-table td {
+  padding: 9px 12px;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  vertical-align: middle;
+  line-height: 1.45;
+}
+.plan-table tbody tr:hover td {
+  background: rgba(255,255,255,.03);
+}
+.plan-table tfoot tr {
+  border-top: 2px solid var(--line2);
+}
+.plan-table tfoot td {
+  font-size: .8rem;
+  padding: 10px 12px;
+}
+
+/* ── Mock exam study plan summary cards ─────────────────────────── */
+.plan-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.plan-summary-card {
+  border-radius: 12px;
+  padding: 14px 14px 12px;
+  text-align: center;
+  border: 1px solid transparent;
+}
+.plan-card-red   { background: rgba(232,83,74,.12);  border-color: rgba(232,83,74,.25); }
+.plan-card-gold  { background: rgba(245,158,11,.1);  border-color: rgba(245,158,11,.25); }
+.plan-card-teal  { background: rgba(45,212,191,.1);  border-color: rgba(45,212,191,.25); }
+.plan-card-icon  { font-size: 1.1rem; margin-bottom: 4px; }
+.plan-card-label {
+  font-size: .6rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--t3); margin-bottom: 5px;
+  font-family: Syne, sans-serif;
+}
+.plan-card-cats  {
+  font-size: .7rem; font-weight: 600; color: var(--text); line-height: 1.4;
+  font-family: Syne, sans-serif;
+}
