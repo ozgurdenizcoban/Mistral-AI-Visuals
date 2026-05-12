@@ -686,3 +686,71 @@ body {
 .edu-diagram .ed-green  { background: #10b981; }
 .edu-diagram .ed-gray   { background: rgba(255,255,255,.12); color: var(--text); border: 1px solid var(--line); }
 .edu-diagram .ed-dark   { background: var(--ink3); color: var(--text); border: 1px solid var(--line2); }
+/* Wide node — spans full available width */
+.edu-diagram .ed-wide {
+  max-width: 100% !important;
+  width: 100%;
+}
+/* Sub-text line inside a node (dosage, detail, percentage) */
+.edu-diagram .ed-sub {
+  font-size: .64rem;
+  font-weight: 400;
+  opacity: .88;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+/* Arrow label — placed between two .ed-arrow divs to annotate the transition */
+.edu-diagram .ed-lbl {
+  font-size: .62rem;
+  font-weight: 700;
+  color: var(--teal);
+  background: rgba(45,212,191,.1);
+  border: 1px solid rgba(45,212,191,.22);
+  padding: 1px 9px;
+  border-radius: 20px;
+  text-align: center;
+  line-height: 1.5;
+  margin: -2px 0;
+  z-index: 1;
+}
+/* Branching layout: one node splits into two vertical paths */
+.edu-diagram .ed-split {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+  align-items: flex-start;
+}
+.edu-diagram .ed-split-branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  max-width: 200px;
+}
+/* Two-column comparison grid */
+.edu-diagram .ed-compare {
+  display: grid;
+  grid-template-columns: 1fr 22px 1fr;
+  gap: 6px;
+  align-items: start;
+  width: 100%;
+}
+.edu-diagram .ed-compare-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.edu-diagram .ed-vs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .62rem;
+  font-weight: 900;
+  color: var(--ac);
+  padding-top: 8px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: .08em;
+}

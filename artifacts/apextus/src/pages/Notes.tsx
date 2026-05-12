@@ -17,7 +17,8 @@ export default function Notes() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [studyAdd, setStudyAdd] = useState(1);
   const [bgRegenCount, setBgRegenCount] = useState(0);
-  const [bulkSync, setBulkSync] = useState<{ running: boolean; done: number; total: number; errors: number } | null>(null);
+  const [bulkSync, setBulkSync] = useState<{ running: boolean; done: number; total: number; errors: number; skipped: number } | null>(null);
+  const bulkStopRef = useRef(false);
 
   const noteRef = useRef<HTMLDivElement>(null);
   const activeTopicRef = useRef<{ cat: string; icon: string; topic: string } | null>(null);
@@ -198,41 +199,56 @@ export default function Notes() {
 
   async function runBulkSync() {
     if (bulkSync?.running) return;
+    bulkStopRef.current = false;
     const allTopics = TREE.flatMap((b) => b.topics.map((t) => ({ cat: b.cat, icon: b.icon, topic: t })));
-    setBulkSync({ running: true, done: 0, total: allTopics.length, errors: 0 });
+    setBulkSync({ running: true, done: 0, total: allTopics.length, errors: 0, skipped: 0 });
     let done = 0;
     let errors = 0;
-    const BATCH = 3;
-    for (let i = 0; i < allTopics.length; i += BATCH) {
-      const batch = allTopics.slice(i, i + BATCH);
-      await Promise.all(
-        batch.map(async ({ cat, icon: _icon, topic }) => {
+    let skipped = 0;
+
+    for (const { cat, topic } of allTopics) {
+      if (bulkStopRef.current) break;
+
+      // Check if already up to date
+      let upToDate = false;
+      try {
+        const cached = await fbGetNote(topic);
+        if (cached?.html && cached.html.includes('class="edu-diagram"')) {
+          upToDate = true;
+          skipped++;
+        }
+      } catch (_) {}
+
+      if (!upToDate) {
+        let success = false;
+        for (let attempt = 0; attempt < 3 && !success; attempt++) {
           try {
-            const cached = await fbGetNote(topic);
-            if (cached?.html && cached.html.includes('class="edu-diagram"')) {
-              // Already up to date — skip
-            } else {
-              const [html, linkHtml] = await Promise.all([
-                mistralText(buildNotePrompt(cat, topic), 24000, 0.35),
-                mistralText(buildLinkPrompt(cat, topic), 5000, 0.4),
-              ]);
-              const cleanHtml = cleanContent(html);
-              const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
-              const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
-              noteCache[topic] = full;
-              if (activeTopicRef.current?.topic === topic) setNoteHtml(full);
-              await fbSaveNote(topic, cleanHtml, cleanLink, []);
-            }
+            if (attempt > 0) await new Promise((r) => setTimeout(r, 6000 * attempt));
+            const html = await mistralText(buildNotePrompt(cat, topic), 24000, 0.35);
+            const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 5000, 0.4);
+            const cleanHtml = cleanContent(html);
+            const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
+            const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
+            noteCache[topic] = full;
+            if (activeTopicRef.current?.topic === topic) setNoteHtml(full);
+            await fbSaveNote(topic, cleanHtml, cleanLink, []);
+            success = true;
           } catch (_) {
-            errors++;
+            if (attempt === 2) errors++;
           }
-          done++;
-          setBulkSync({ running: true, done, total: allTopics.length, errors });
-        })
-      );
+        }
+      }
+
+      done++;
+      setBulkSync({ running: true, done, total: allTopics.length, errors, skipped });
     }
-    setBulkSync({ running: false, done, total: allTopics.length, errors });
-    toast.success(`Tüm notlar güncellendi! (${done - errors} başarılı${errors ? `, ${errors} hata` : ""})`);
+
+    setBulkSync({ running: false, done, total: allTopics.length, errors, skipped });
+    if (bulkStopRef.current) {
+      toast.info(`Durduruldu — ${done} / ${allTopics.length} işlendi`);
+    } else {
+      toast.success(`Tamamlandı! ${done - errors - skipped} yeni not + ${skipped} zaten güncel${errors ? ` · ${errors} hata` : ""}`);
+    }
   }
 
   async function regenerateNoteInBackground(cat: string, icon: string, topic: string) {
@@ -312,12 +328,24 @@ export default function Notes() {
         {/* Bulk sync button + progress */}
         {bulkSync?.running ? (
           <div style={{ background: "var(--td)", borderRadius: 9, padding: "8px 10px", marginBottom: 8, fontSize: ".7rem", fontFamily: "Syne, sans-serif" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--teal)", fontWeight: 700, marginBottom: 4 }}>
-              <span className="spin" style={{ width: 8, height: 8, borderWidth: 1.5 }} />
-              Notlar güncelleniyor...
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--teal)", fontWeight: 700 }}>
+                <span className="spin" style={{ width: 8, height: 8, borderWidth: 1.5 }} />
+                Güncelleniyor...
+              </div>
+              <button
+                style={{ background: "none", border: "1px solid rgba(232,83,74,.4)", borderRadius: 6, color: "var(--ac)", fontSize: ".6rem", padding: "1px 7px", cursor: "pointer", fontFamily: "Syne, sans-serif", fontWeight: 700 }}
+                onClick={() => { bulkStopRef.current = true; }}
+              >
+                Durdur
+              </button>
             </div>
-            <div style={{ color: "var(--t2)" }}>{bulkSync.done} / {bulkSync.total} konu</div>
-            <div className="progress-bar" style={{ marginTop: 5 }}>
+            <div style={{ color: "var(--t2)", marginBottom: 4 }}>
+              {bulkSync.done} / {bulkSync.total}
+              {bulkSync.skipped > 0 && <span style={{ color: "var(--green)", marginLeft: 5 }}>✓ {bulkSync.skipped} atlandı</span>}
+              {bulkSync.errors > 0 && <span style={{ color: "var(--ac)", marginLeft: 5 }}>✗ {bulkSync.errors} hata</span>}
+            </div>
+            <div className="progress-bar">
               <div className="progress-fill" style={{ width: `${Math.round((bulkSync.done / bulkSync.total) * 100)}%`, background: "var(--teal)" }} />
             </div>
           </div>
@@ -327,7 +355,9 @@ export default function Notes() {
             style={{ width: "100%", justifyContent: "center", fontSize: ".72rem", marginBottom: 8 }}
             onClick={runBulkSync}
           >
-            {bulkSync ? `✓ ${bulkSync.done} not güncellendi` : "⟳ Tüm Notları Güncelle"}
+            {bulkSync
+              ? `✓ ${bulkSync.done - bulkSync.errors - bulkSync.skipped} yeni · ${bulkSync.skipped} güncel${bulkSync.errors ? ` · ${bulkSync.errors} hata` : ""}`
+              : "⟳ Tüm Notları Güncelle"}
           </button>
         )}
 
@@ -491,63 +521,121 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - <div class="score-box"><div class="score-title">SKOR</div>...</div>
 
 GÖRSEL DİYAGRAM KURALI (ZORUNLU — EN ÖNEMLİ KURAL):
-Her konuda 2–3 adet RENKLI HTML diyagramı üret. Dış görsel KULLANMA — saf HTML/CSS. Oklar <div class="ed-arrow"></div> şeklinde yazılır (içi BOŞ bırakılır).
+Her konuda 3 adet DETAYLI, RENKLI HTML diyagramı üret. Dış görsel KULLANMA — saf HTML/CSS. Boş elemanlar: ed-arrow/ed-arrow-h/ed-lbl içi HEP BOŞ bırakılır.
 
-TİP 1 — Patofizyoloji Akış Şeması:
+CSS SINIFLARI:
+• ed-node ed-[renk] — kutucuk (içine ed-sub ekleyerek alt bilgi ekle)
+• ed-sub — kutucuk içinde küçük alt bilgi (doz, yüzde, örnek)
+• ed-wide — tam genişlik kutucuk
+• ed-row — yan yana kutucuklar (paralel yollar)
+• ed-arrow — dikey aşağı ok (BOŞ)  |  ed-arrow-h — yatay sağ ok (BOŞ)
+• ed-lbl — ok üstündeki geçiş etiketi (neden/koşul) (BOŞ değil — içine metin yaz)
+• ed-split + ed-split-branch — karar noktasından iki kola ayrılma
+• ed-compare + ed-compare-col + ed-vs — iki tipi yan yana karşılaştır
+
+TİP 1 — Patofizyoloji Akışı (etiketli oklar + alt bilgi):
 <div class="edu-diagram">
-  <div class="ed-title">PAT0FİZYOLOJİ</div>
+  <div class="ed-title">PAT0FİZYOLOJİ — [KONU ADI]</div>
   <div class="ed-flow">
-    <div class="ed-node ed-red">Primer Etken</div>
+    <div class="ed-node ed-red ed-wide">Tetikleyici Etken<div class="ed-sub">örn: %80 HBV, otoimmün, genetik</div></div>
+    <div class="ed-arrow"></div>
+    <div class="ed-lbl">aktive eder / yol açar</div>
     <div class="ed-arrow"></div>
     <div class="ed-row">
-      <div class="ed-node ed-orange">Mekanizma A</div>
-      <div class="ed-node ed-orange">Mekanizma B</div>
+      <div class="ed-node ed-orange">Mekanizma 1<div class="ed-sub">spesifik yol</div></div>
+      <div class="ed-node ed-orange">Mekanizma 2<div class="ed-sub">spesifik yol</div></div>
     </div>
     <div class="ed-arrow"></div>
-    <div class="ed-node ed-gold">Patolojik Sonuç</div>
+    <div class="ed-node ed-gold ed-wide">Patolojik Sonuç<div class="ed-sub">sayısal eşik / biyobelirteç</div></div>
+    <div class="ed-arrow"></div>
+    <div class="ed-lbl">klinik yansıması</div>
     <div class="ed-arrow"></div>
     <div class="ed-row">
-      <div class="ed-node ed-blue">Semptom 1</div>
-      <div class="ed-node ed-blue">Semptom 2</div>
-      <div class="ed-node ed-purple">Komplikasyon</div>
+      <div class="ed-node ed-blue">Semptom 1<div class="ed-sub">açıklama</div></div>
+      <div class="ed-node ed-blue">Semptom 2<div class="ed-sub">açıklama</div></div>
+      <div class="ed-node ed-purple">Komplikasyon<div class="ed-sub">%oran / prognoz</div></div>
     </div>
   </div>
 </div>
 
-TİP 2 — Sınıflama / Karşılaştırma:
+TİP 2 — Karar Ağacı / Tanı Algoritması (dallanma):
 <div class="edu-diagram">
-  <div class="ed-title">SINIFLANDIRMA</div>
+  <div class="ed-title">TANI / KARAR ALGORİTMASI</div>
   <div class="ed-flow">
-    <div class="ed-node ed-gray">Ana Başlık</div>
+    <div class="ed-node ed-gray ed-wide">Başlangıç: Klinik şüphe / başvuru</div>
     <div class="ed-arrow"></div>
-    <div class="ed-row">
-      <div class="ed-node ed-red">Tip 1<br/><small style="font-weight:400;opacity:.85">özellik</small></div>
-      <div class="ed-node ed-teal">Tip 2<br/><small style="font-weight:400;opacity:.85">özellik</small></div>
-      <div class="ed-node ed-blue">Tip 3<br/><small style="font-weight:400;opacity:.85">özellik</small></div>
+    <div class="ed-node ed-gold ed-wide">Anahtar Test / Kriter<div class="ed-sub">eşik değeri belirt</div></div>
+    <div class="ed-arrow"></div>
+    <div class="ed-split">
+      <div class="ed-split-branch">
+        <div class="ed-lbl">EVET / Pozitif</div>
+        <div class="ed-arrow"></div>
+        <div class="ed-node ed-red">Doğrulanan Tanı<div class="ed-sub">ek doğrulayıcı test</div></div>
+        <div class="ed-arrow"></div>
+        <div class="ed-node ed-teal">Tedavi Başla<div class="ed-sub">1. basamak ilaç + doz</div></div>
+      </div>
+      <div class="ed-split-branch">
+        <div class="ed-lbl">HAYIR / Negatif</div>
+        <div class="ed-arrow"></div>
+        <div class="ed-node ed-blue">Ayırıcı Tanı<div class="ed-sub">alternatifler</div></div>
+        <div class="ed-arrow"></div>
+        <div class="ed-node ed-gray">İleri Tetkik<div class="ed-sub">hangi test?</div></div>
+      </div>
     </div>
   </div>
 </div>
 
-TİP 3 — Tedavi Algoritması (Basamaklı):
+TİP 3 — Karşılaştırma (iki tip/form yan yana):
 <div class="edu-diagram">
-  <div class="ed-title">TEDAVİ ALGORİTMASI</div>
+  <div class="ed-title">TİP A vs TİP B KARŞILAŞTIRMA</div>
   <div class="ed-flow">
-    <div class="ed-node ed-gold">1. Basamak: İlk İlaç / Yaklaşım</div>
-    <div class="ed-arrow"></div>
-    <div class="ed-node ed-orange">Yetersiz Yanıt / Kontrendikasyon</div>
-    <div class="ed-arrow"></div>
-    <div class="ed-node ed-teal">2. Basamak: Alternatif / Ek İlaç</div>
-    <div class="ed-arrow"></div>
-    <div class="ed-row">
-      <div class="ed-node ed-blue">3a: Kombinasyon</div>
-      <div class="ed-node ed-purple">3b: Özel Durum / Acil</div>
+    <div class="ed-compare">
+      <div class="ed-compare-col">
+        <div class="ed-node ed-red">Tip A / Form 1<div class="ed-sub">sıklık, yaş</div></div>
+        <div class="ed-node ed-orange">Mekanizma<div class="ed-sub">patofizyo</div></div>
+        <div class="ed-node ed-blue">Klinik Bulgular<div class="ed-sub">ayırt edici özellik</div></div>
+        <div class="ed-node ed-teal">Tedavi<div class="ed-sub">ilaç + doz</div></div>
+        <div class="ed-node ed-purple">Prognoz<div class="ed-sub">%mortalite</div></div>
+      </div>
+      <div class="ed-vs">VS</div>
+      <div class="ed-compare-col">
+        <div class="ed-node ed-blue">Tip B / Form 2<div class="ed-sub">sıklık, yaş</div></div>
+        <div class="ed-node ed-orange">Mekanizma<div class="ed-sub">patofizyo</div></div>
+        <div class="ed-node ed-blue">Klinik Bulgular<div class="ed-sub">ayırt edici özellik</div></div>
+        <div class="ed-node ed-teal">Tedavi<div class="ed-sub">ilaç + doz</div></div>
+        <div class="ed-node ed-green">Prognoz<div class="ed-sub">%mortalite</div></div>
+      </div>
     </div>
   </div>
 </div>
 
-RENK KODLARI: ed-red=kritik/etken | ed-orange=mekanizma/uyarı | ed-gold=bulgu/tanı | ed-teal=tedavi/çözüm | ed-blue=klinik belirti | ed-purple=komplikasyon/acil | ed-green=iyi prognoz | ed-gray=nötr/genel
-KURALLAR: ed-arrow MUTLAKA BOŞ (<div class="ed-arrow"></div>), Türkçe etiketler, gerçek ilaç/hastalık adları, 5–10 kutucuk/diyagram
-DİYAGRAMLARI: Patofizyoloji h2'sinden → hemen sonra | Sınıflama h2'sinden → hemen sonra | Tedavi h2'sinden → hemen sonra
+TİP 4 — Tedavi Basamakları (başarısızlık koşullu):
+<div class="edu-diagram">
+  <div class="ed-title">TEDAVİ ALGORİTMASI — BASAMAKLI</div>
+  <div class="ed-flow">
+    <div class="ed-node ed-teal ed-wide">1. BASAMAK: [İlaç adı] [doz] [süre]<div class="ed-sub">izlem kriteri: [ne zaman değerlendir]</div></div>
+    <div class="ed-arrow"></div>
+    <div class="ed-lbl">Yetersiz yanıt / intolerans ise</div>
+    <div class="ed-arrow"></div>
+    <div class="ed-node ed-gold ed-wide">2. BASAMAK: [İlaç/doz değişikliği]<div class="ed-sub">doz artır veya alternatife geç</div></div>
+    <div class="ed-arrow"></div>
+    <div class="ed-lbl">Dirençli vaka / komplikasyon</div>
+    <div class="ed-arrow"></div>
+    <div class="ed-row">
+      <div class="ed-node ed-orange">3a: Kombinasyon<div class="ed-sub">hangi ilaçlar?</div></div>
+      <div class="ed-node ed-purple">3b: Uzman Yönlendir<div class="ed-sub">endikasyon</div></div>
+      <div class="ed-node ed-red">ACİL: [işlem]<div class="ed-sub">hayat kurtarıcı</div></div>
+    </div>
+  </div>
+</div>
+
+RENK KODLARI: ed-red=kritik/etken/acil | ed-orange=mekanizma/uyarı | ed-gold=tanı/bulgular | ed-teal=tedavi/çözüm/iyi | ed-blue=klinik/semptom | ed-purple=komplikasyon/acil | ed-green=iyi prognoz | ed-gray=nötr/başlangıç
+ZORUNLU KURALLAR:
+• ed-arrow / ed-arrow-h / ed-lbl: içleri BOŞ kalır (metin yazma)
+• Her ed-node içine gerçek klinik değerler yaz (ilaç adı+doz, sayısal eşik, yüzde oran)
+• ed-sub kullanarak her kutucuğa alt bilgi ekle — soyut etiket YAZMA ("Mekanizma" değil "ACE inhibitörü → bradikinin↑")
+• Diyagram başlıkları konuya özel olsun ("PAT0FİZYOLOJİ — KALBİ YETMEZLİK" gibi)
+• Patofizyoloji h2'sinin hemen altına TİP 1 | Sınıflama/Evreleme h2'sinin altına TİP 2 veya TİP 3 | Tedavi h2'sinin altına TİP 4 yerleştir
 
 ZORUNLU BÖLÜMLER:
 <h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>
