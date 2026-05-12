@@ -17,6 +17,7 @@ export default function Notes() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [studyAdd, setStudyAdd] = useState(1);
   const [bgRegenCount, setBgRegenCount] = useState(0);
+  const [bgRegenTopics, setBgRegenTopics] = useState<Set<string>>(new Set());
 
   const noteRef = useRef<HTMLDivElement>(null);
   const activeTopicRef = useRef<{ cat: string; icon: string; topic: string } | null>(null);
@@ -176,10 +177,8 @@ export default function Notes() {
     } catch (_) {}
 
     try {
-      const [html, linkHtml] = await Promise.all([
-        mistralText(buildNotePrompt(cat, topic), 24000, 0.35),
-        mistralText(buildLinkPrompt(cat, topic), 5000, 0.4),
-      ]);
+      const html = await mistralText(buildNotePrompt(cat, topic), 8000, 0.35);
+      const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 3000, 0.4);
       const cleanHtml = cleanContent(html);
       const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
@@ -200,21 +199,27 @@ export default function Notes() {
     if (bgRegenRef.current.has(topic)) return;
     bgRegenRef.current.add(topic);
     setBgRegenCount((c) => c + 1);
+    setBgRegenTopics((prev) => new Set([...prev, topic]));
     try {
-      const [html, linkHtml] = await Promise.all([
-        mistralText(buildNotePrompt(cat, topic), 24000, 0.35),
-        mistralText(buildLinkPrompt(cat, topic), 5000, 0.4),
-      ]);
+      const html = await mistralText(buildNotePrompt(cat, topic), 8000, 0.35);
+      const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 3000, 0.4);
       const cleanHtml = cleanContent(html);
       const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
-      // Update displayed note if user is still viewing this topic
-      if (activeTopicRef.current?.topic === topic) setNoteHtml(full);
+      if (activeTopicRef.current?.topic === topic) {
+        setNoteHtml(full);
+        toast.success(`${topic} notu güncellendi`);
+      }
       fbSaveNote(topic, cleanHtml, cleanLink, []).catch(() => {});
-    } catch (_) {}
+    } catch (e) {
+      if (activeTopicRef.current?.topic === topic) {
+        toast.error(`Not güncellenemedi: ${(e as Error).message}`);
+      }
+    }
     bgRegenRef.current.delete(topic);
-    setBgRegenCount((c) => c - 1);
+    setBgRegenCount((c) => Math.max(0, c - 1));
+    setBgRegenTopics((prev) => { const n = new Set(prev); n.delete(topic); return n; });
   }
 
   function buildNoteHtml(cat: string, topic: string, html: string, linkHtml: string) {
@@ -376,13 +381,24 @@ export default function Notes() {
               </div>
             </div>
 
+            {/* Background regen indicator for this topic */}
+            {!noteLoading && noteHtml && bgRegenTopics.has(activeTopic.topic) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(45,212,191,.08)", border: "1px solid rgba(45,212,191,.2)", borderRadius: 9, padding: "7px 12px", marginBottom: 12, fontSize: ".75rem", color: "var(--teal)", fontFamily: "Syne, sans-serif", fontWeight: 700 }}>
+                <span className="spin" style={{ width: 9, height: 9, borderWidth: 1.5, flexShrink: 0 }} />
+                Yeni not hazırlanıyor, bozulmayacak — tamamlanınca güncellenir
+              </div>
+            )}
+
             {/* Note content */}
             {noteLoading ? (
               <div className="loading-screen">
                 <div className="loading-orb">📚</div>
                 <div className="loading-title">{activeTopic.topic}</div>
-                <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>
-                  Detaylı TUS notu + bağlantı haritası hazırlanıyor<span className="loading-dots" />
+                <div style={{ color: "var(--teal)", fontSize: ".78rem", marginTop: 6, fontWeight: 600 }}>
+                  Not hazırlanıyor — yaklaşık 1–2 dakika<span className="loading-dots" />
+                </div>
+                <div style={{ color: "var(--t2)", fontSize: ".72rem", marginTop: 4 }}>
+                  Mistral AI detaylı TUS içeriği üretiyor
                 </div>
               </div>
             ) : noteHtml ? (
