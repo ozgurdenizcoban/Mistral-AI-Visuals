@@ -677,13 +677,13 @@ body {
   margin-top: 2px;
 }
 /* Node colour variants */
-.edu-diagram .ed-red    { background: #e84a5f; }
-.edu-diagram .ed-orange { background: #e17055; }
-.edu-diagram .ed-gold   { background: #f59e0b; color: #1a1a2e; }
-.edu-diagram .ed-teal   { background: #2dd4bf; color: #1a1a2e; }
-.edu-diagram .ed-blue   { background: #3b82f6; }
-.edu-diagram .ed-purple { background: #8b5cf6; }
-.edu-diagram .ed-green  { background: #10b981; }
+.edu-diagram .ed-red    { background: #c0392b; color: #fff; }
+.edu-diagram .ed-orange { background: #d35400; color: #fff; }
+.edu-diagram .ed-gold   { background: #d97706; color: #fff; }
+.edu-diagram .ed-teal   { background: #0d9488; color: #fff; }
+.edu-diagram .ed-blue   { background: #1d4ed8; color: #fff; }
+.edu-diagram .ed-purple { background: #7c3aed; color: #fff; }
+.edu-diagram .ed-green  { background: #047857; color: #fff; }
 .edu-diagram .ed-gray   { background: rgba(255,255,255,.12); color: var(--text); border: 1px solid var(--line); }
 .edu-diagram .ed-dark   { background: var(--ink3); color: var(--text); border: 1px solid var(--line2); }
 /* Wide node — spans full available width */
@@ -695,9 +695,12 @@ body {
 .edu-diagram .ed-sub {
   font-size: .64rem;
   font-weight: 400;
-  opacity: .88;
+  color: rgba(255,255,255,.82);
   margin-top: 3px;
   line-height: 1.4;
+}
+.edu-diagram .ed-gray .ed-sub {
+  color: var(--t2);
 }
 /* Arrow label — placed between two .ed-arrow divs to annotate the transition */
 .edu-diagram .ed-lbl {
