@@ -1,17 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
-import { TREE, soruTipleri, FREE_LIMITS } from "@/lib/data";
+import { TREE, soruTipleri } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
 import { qFingerprint, toDay, prevDay } from "@/lib/utils";
-import { getQuizImage, NoteImage } from "@/lib/imageGen";
 import { toast } from "sonner";
 
 interface Q extends QuizQuestion {
   _fid?: string;
 }
-
-type ImgState = NoteImage | null | "loading";
 
 export default function Quiz() {
   const { state, saveState, isPro, checkLimit, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
@@ -37,12 +34,6 @@ export default function Quiz() {
   const [aiExp, setAiExp] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Per-question image state (only for mapped topics)
-  const [qImages, setQImages] = useState<Record<number, ImgState>>({});
-
-  // Track which image URLs have been shown this session — prevents duplicates
-  const usedImageUrls = useRef<Set<string>>(new Set());
-
   // Refs to always have fresh values inside async callbacks
   const currentRef = useRef(current);
   const selectedRef = useRef(selected);
@@ -51,25 +42,6 @@ export default function Quiz() {
   useEffect(() => { selectedRef.current = selected; }, [selected]);
   useEffect(() => { questionsRef.current = questions; }, [questions]);
 
-  // Load image selectively — only when topic is in TOPIC_MAP and URL not already used this session
-  useEffect(() => {
-    if (phase !== "quiz" || !questions[current]) return;
-    if (qImages[current] !== undefined) return;
-
-    const q = questions[current];
-    setQImages((prev) => ({ ...prev, [current]: "loading" }));
-    getQuizImage(q.tags || [])
-      .then((img) => {
-        if (img && !usedImageUrls.current.has(img.url)) {
-          usedImageUrls.current.add(img.url);
-          setQImages((prev) => ({ ...prev, [current]: img }));
-        } else {
-          // Image was already shown for another question — skip
-          setQImages((prev) => ({ ...prev, [current]: null }));
-        }
-      })
-      .catch(() => setQImages((prev) => ({ ...prev, [current]: null })));
-  }, [current, phase, questions]);
 
   useEffect(() => {
     if (quizTarget) {
@@ -96,11 +68,6 @@ export default function Quiz() {
   useEffect(() => () => stopTimer(), []);
 
   async function generateQuestions() {
-    if (!checkLimit("quiz")) {
-      toast.error(`Ücretsiz planın ${FREE_LIMITS.quiz} soru hakkı bitti. Planları gör!`);
-      setCurrentPage("pricing");
-      return;
-    }
     setLoading(true);
     setPhase("quiz");
     setCurrent(0);
@@ -109,8 +76,6 @@ export default function Quiz() {
     setSelected(null);
     setAnswered(false);
     setAiExp(null);
-    setQImages({});
-    usedImageUrls.current = new Set();
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
@@ -308,15 +273,6 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
           <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>TUS tarzı klinik vaka soruları — performansına göre kişiselleştirilmiş</div>
         </div>
 
-        {!isPro() && (
-          <div style={{ background: "var(--rd)", border: "1px solid rgba(232,83,74,.25)", borderRadius: 10, padding: "11px 15px", marginBottom: 16, fontSize: ".8rem", color: "var(--ac)" }}>
-            🔒 Ücretsiz plan: {FREE_LIMITS.quiz} soru hakkın var ({state.total || 0} kullanıldı).{" "}
-            <button style={{ background: "none", border: "none", color: "var(--cream)", cursor: "pointer", fontWeight: 700 }} onClick={() => setCurrentPage("pricing")}>
-              Sınırsız için Pro'ya geç →
-            </button>
-          </div>
-        )}
-
         <div className="card">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
@@ -414,7 +370,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
         )}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-          <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); setQImages({}); }}>✦ Yeni Quiz</button>
+          <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); }}>✦ Yeni Quiz</button>
           <button className="btn btn-ghost" onClick={() => setCurrentPage("stats")}>📊 İstatistikler</button>
         </div>
       </div>
@@ -425,7 +381,6 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
   const q = questions[current];
   if (!q) return null;
   const opts = ["A", "B", "C", "D", "E"];
-  const imgState = qImages[current];
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto" }}>
@@ -454,32 +409,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
       <div className="vc">
         <div className="vhdr">
           <span className="vlbl">Klinik Vaka — TUS Formatı</span>
-          {/* Image loading indicator subtle badge */}
-          {imgState === "loading" && (
-            <span style={{ fontSize: ".6rem", color: "var(--t3)", display: "flex", alignItems: "center", gap: 4 }}>
-              <span className="spin" style={{ width: 8, height: 8, borderWidth: 1.5 }} />
-              görsel
-            </span>
-          )}
         </div>
-
-        {/* Clinical reference image — right-floated on desktop, full-width on mobile */}
-        {imgState && imgState !== "loading" && (
-          <div className="quiz-clinical-img">
-            <img
-              src={imgState.url}
-              alt={imgState.caption}
-              onError={(e) => {
-                const el = (e.currentTarget as HTMLImageElement).closest<HTMLDivElement>(".quiz-clinical-img");
-                if (el) el.style.display = "none";
-              }}
-            />
-            <div className="quiz-clinical-cap">
-              Klinik Referans
-              <span style={{ opacity: .55, display: "block" }}>Tıbbi Görsel</span>
-            </div>
-          </div>
-        )}
 
         <div className="vbody">
           <div className="vnum">{current + 1}</div>

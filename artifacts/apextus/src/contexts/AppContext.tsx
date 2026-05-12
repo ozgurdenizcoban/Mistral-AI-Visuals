@@ -158,15 +158,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, []);
 
-  const isPro = useCallback(() => {
-    const s = stateRef.current;
-    if (s.plan === "free") return false;
-    if (s.planExpiry) {
-      const exp = new Date(s.planExpiry);
-      if (!isNaN(exp.getTime()) && exp < new Date()) return false;
-    }
-    return s.plan === "weekly" || s.plan === "monthly";
-  }, []);
+  // All features are currently free for all users
+  const isPro = useCallback(() => true, []);
 
   const checkLimit = useCallback(
     (type: "quiz" | "notes" | "aiExplain") => {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
-import { TREE, LINK_MAP, SR_INTERVALS, FREE_LIMITS } from "@/lib/data";
+import { TREE, LINK_MAP, SR_INTERVALS } from "@/lib/data";
 import { mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
 import { fetchMedicalImage, getTopicDiagramQuery } from "@/lib/imageGen";
@@ -10,14 +10,19 @@ import { toast } from "sonner";
 const noteCache: Record<string, string> = {};
 
 export default function Notes() {
-  const { state, saveState, isPro, checkLimit, noteTarget, setNoteTarget, setCurrentPage, setQuizTarget } = useApp();
+  const { state, saveState, noteTarget, setNoteTarget, setCurrentPage, setQuizTarget } = useApp();
   const [selectedCat, setSelectedCat] = useState<string | null>(noteTarget?.cat ?? null);
   const [activeTopic, setActiveTopic] = useState<{ cat: string; icon: string; topic: string } | null>(noteTarget ?? null);
   const [noteHtml, setNoteHtml] = useState<string | null>(null);
   const [noteLoading, setNoteLoading] = useState(false);
   const [studyAdd, setStudyAdd] = useState(1);
+  const [bgRegenCount, setBgRegenCount] = useState(0);
 
   const noteRef = useRef<HTMLDivElement>(null);
+  const activeTopicRef = useRef<{ cat: string; icon: string; topic: string } | null>(null);
+  const bgRegenRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
 
   // Inject supplementary Wikipedia images (only for old notes without HTML diagrams).
   useEffect(() => {
@@ -145,11 +150,10 @@ export default function Notes() {
   async function loadNote(cat: string, icon: string, topic: string) {
     if (noteCache[topic]) {
       setNoteHtml(noteCache[topic]);
-      return;
-    }
-    if (!checkLimit("notes")) {
-      toast.error(`Ücretsiz planın ${FREE_LIMITS.notes} not hakkı bitti!`);
-      setCurrentPage("pricing");
+      // Old note without HTML diagrams → silently regenerate in background
+      if (!noteCache[topic].includes('class="edu-diagram"')) {
+        regenerateNoteInBackground(cat, icon, topic);
+      }
       return;
     }
     setNoteLoading(true);
@@ -163,6 +167,10 @@ export default function Notes() {
         noteCache[topic] = full;
         setNoteHtml(full);
         setNoteLoading(false);
+        // Old note without HTML diagrams → silently regenerate in background
+        if (!cached.html.includes('class="edu-diagram"')) {
+          regenerateNoteInBackground(cat, icon, topic);
+        }
         return;
       }
     } catch (_) {}
@@ -177,11 +185,6 @@ export default function Notes() {
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
       setNoteHtml(full);
-
-      if (!isPro()) {
-        const ns = { ...state, noteCount: (state.noteCount || 0) + 1 };
-        saveState(ns);
-      }
       toast.success(`${topic} notu yüklendi`);
       fbSaveNote(topic, cleanHtml, cleanLink, []).catch(() => {});
     } catch (e) {
@@ -190,6 +193,27 @@ export default function Notes() {
     } finally {
       setNoteLoading(false);
     }
+  }
+
+  async function regenerateNoteInBackground(cat: string, icon: string, topic: string) {
+    if (bgRegenRef.current.has(topic)) return;
+    bgRegenRef.current.add(topic);
+    setBgRegenCount((c) => c + 1);
+    try {
+      const [html, linkHtml] = await Promise.all([
+        mistralText(buildNotePrompt(cat, topic), 24000, 0.35),
+        mistralText(buildLinkPrompt(cat, topic), 5000, 0.4),
+      ]);
+      const cleanHtml = cleanContent(html);
+      const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
+      const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
+      noteCache[topic] = full;
+      // Update displayed note if user is still viewing this topic
+      if (activeTopicRef.current?.topic === topic) setNoteHtml(full);
+      fbSaveNote(topic, cleanHtml, cleanLink, []).catch(() => {});
+    } catch (_) {}
+    bgRegenRef.current.delete(topic);
+    setBgRegenCount((c) => c - 1);
   }
 
   function buildNoteHtml(cat: string, topic: string, html: string, linkHtml: string) {
@@ -241,8 +265,16 @@ export default function Notes() {
     <div style={{ display: "flex", gap: 18, minHeight: "70vh" }}>
       {/* Sidebar */}
       <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6 }} className="notes-sidebar">
-        <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.15rem", fontWeight: 900, color: "var(--cream)", marginBottom: 6 }}>
-          Konu Notları
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.15rem", fontWeight: 900, color: "var(--cream)" }}>
+            Konu Notları
+          </div>
+          {bgRegenCount > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: ".6rem", color: "var(--teal)", background: "var(--td)", padding: "2px 7px", borderRadius: 20, fontFamily: "Syne, sans-serif", fontWeight: 700 }}>
+              <span className="spin" style={{ width: 7, height: 7, borderWidth: 1.5 }} />
+              {bgRegenCount} güncelleniyor
+            </span>
+          )}
         </div>
 
         {TREE.map((b) => (
