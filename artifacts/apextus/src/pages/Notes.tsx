@@ -16,12 +16,9 @@ export default function Notes() {
   const [noteHtml, setNoteHtml] = useState<string | null>(null);
   const [noteLoading, setNoteLoading] = useState(false);
   const [studyAdd, setStudyAdd] = useState(1);
-  const [bgRegenCount, setBgRegenCount] = useState(0);
-  const [bgRegenTopics, setBgRegenTopics] = useState<Set<string>>(new Set());
 
   const noteRef = useRef<HTMLDivElement>(null);
   const activeTopicRef = useRef<{ cat: string; icon: string; topic: string } | null>(null);
-  const bgRegenRef = useRef<Set<string>>(new Set());
 
   useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
 
@@ -151,10 +148,6 @@ export default function Notes() {
   async function loadNote(cat: string, icon: string, topic: string) {
     if (noteCache[topic]) {
       setNoteHtml(noteCache[topic]);
-      // Old note without HTML diagrams → silently regenerate in background
-      if (!noteCache[topic].includes('class="edu-diagram"')) {
-        regenerateNoteInBackground(cat, icon, topic);
-      }
       return;
     }
     setNoteLoading(true);
@@ -168,10 +161,6 @@ export default function Notes() {
         noteCache[topic] = full;
         setNoteHtml(full);
         setNoteLoading(false);
-        // Old note without HTML diagrams → silently regenerate in background
-        if (!cached.html.includes('class="edu-diagram"')) {
-          regenerateNoteInBackground(cat, icon, topic);
-        }
         return;
       }
     } catch (_) {}
@@ -194,33 +183,6 @@ export default function Notes() {
     }
   }
 
-
-  async function regenerateNoteInBackground(cat: string, icon: string, topic: string) {
-    if (bgRegenRef.current.has(topic)) return;
-    bgRegenRef.current.add(topic);
-    setBgRegenCount((c) => c + 1);
-    setBgRegenTopics((prev) => new Set([...prev, topic]));
-    try {
-      const html = await mistralText(buildNotePrompt(cat, topic), 8000, 0.35);
-      const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 3000, 0.4);
-      const cleanHtml = cleanContent(html);
-      const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
-      const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
-      noteCache[topic] = full;
-      if (activeTopicRef.current?.topic === topic) {
-        setNoteHtml(full);
-        toast.success(`${topic} notu güncellendi`);
-      }
-      fbSaveNote(topic, cleanHtml, cleanLink, []).catch(() => {});
-    } catch (e) {
-      if (activeTopicRef.current?.topic === topic) {
-        toast.error(`Not güncellenemedi: ${(e as Error).message}`);
-      }
-    }
-    bgRegenRef.current.delete(topic);
-    setBgRegenCount((c) => Math.max(0, c - 1));
-    setBgRegenTopics((prev) => { const n = new Set(prev); n.delete(topic); return n; });
-  }
 
   function buildNoteHtml(cat: string, topic: string, html: string, linkHtml: string) {
     const links = LINK_MAP[topic] || [];
@@ -274,13 +236,6 @@ export default function Notes() {
         <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.15rem", fontWeight: 900, color: "var(--cream)", marginBottom: 8 }}>
           Konu Notları
         </div>
-
-        {bgRegenCount > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: ".6rem", color: "var(--teal)", background: "var(--td)", padding: "2px 7px", borderRadius: 20, fontFamily: "Syne, sans-serif", fontWeight: 700, marginBottom: 6 }}>
-            <span className="spin" style={{ width: 7, height: 7, borderWidth: 1.5 }} />
-            {bgRegenCount} arka planda güncelleniyor
-          </span>
-        )}
 
         {TREE.map((b) => (
           <div key={b.cat}>
@@ -380,14 +335,6 @@ export default function Notes() {
                 <button className="btn btn-ghost sm" onClick={() => adjustStudyCount(-1)}>− Çıkar</button>
               </div>
             </div>
-
-            {/* Background regen indicator for this topic */}
-            {!noteLoading && noteHtml && bgRegenTopics.has(activeTopic.topic) && (
-              <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(45,212,191,.08)", border: "1px solid rgba(45,212,191,.2)", borderRadius: 9, padding: "7px 12px", marginBottom: 12, fontSize: ".75rem", color: "var(--teal)", fontFamily: "Syne, sans-serif", fontWeight: 700 }}>
-                <span className="spin" style={{ width: 9, height: 9, borderWidth: 1.5, flexShrink: 0 }} />
-                Yeni not hazırlanıyor, bozulmayacak — tamamlanınca güncellenir
-              </div>
-            )}
 
             {/* Note content */}
             {noteLoading ? (

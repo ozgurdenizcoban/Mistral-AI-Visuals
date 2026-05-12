@@ -1,7 +1,7 @@
 const MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY as string;
 const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
 
-// Proper serializing queue — prevents concurrent calls from bypassing the rate limit
+// Serializing queue — prevents concurrent calls from bypassing the rate limit
 let _queueTail: Promise<void> = Promise.resolve();
 
 async function mistralCall(
@@ -10,22 +10,20 @@ async function mistralCall(
   temp = 0.7,
   jsonMode = false
 ): Promise<string> {
-  // Reserve a slot in the queue
   let releaseSlot!: () => void;
   const mySlot = new Promise<void>((resolve) => { releaseSlot = resolve; });
 
-  // Wait for previous call to finish, then enforce 1.1s gap
   const prevTail = _queueTail;
   _queueTail = mySlot;
 
   await prevTail;
-  await new Promise((r) => setTimeout(r, 200));
+  await new Promise((r) => setTimeout(r, 300));
 
   try {
     const body: Record<string, unknown> = {
       model: "mistral-large-latest",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: Math.min(maxTokens, 32000),
+      max_tokens: Math.min(maxTokens, 16000),
       temperature: temp,
     };
 
@@ -46,9 +44,10 @@ async function mistralCall(
 
     let resp = await doFetch();
 
-    // Retry once on 429 with longer backoff
-    if (resp.status === 429) {
-      await new Promise((r) => setTimeout(r, 8000));
+    // Retry on 429 (rate limit) or 500 (transient server error)
+    if (resp.status === 429 || resp.status === 500) {
+      const wait = resp.status === 429 ? 8000 : 5000;
+      await new Promise((r) => setTimeout(r, wait));
       resp = await doFetch();
     }
 
