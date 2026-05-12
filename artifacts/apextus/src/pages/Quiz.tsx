@@ -11,7 +11,7 @@ interface Q extends QuizQuestion {
 }
 
 export default function Quiz() {
-  const { state, saveState, isPro, checkLimit, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
+  const { state, saveState, isPro, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
 
   const [phase, setPhase] = useState<"setup" | "quiz" | "result">("setup");
   const [cat, setCat] = useState(quizTarget?.cat || "Kardiyoloji");
@@ -213,12 +213,6 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
   }
 
   async function fetchAIExplain() {
-    if (!checkLimit("aiExplain")) {
-      toast.error("Klinik analiz hakkın doldu. Pro'ya geç!");
-      setCurrentPage("pricing");
-      return;
-    }
-
     const idx = currentRef.current;
     const sel = selectedRef.current;
     const q = questionsRef.current[idx];
@@ -250,9 +244,6 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
 
       if (currentRef.current === idx) {
         setAiExp(cached);
-        if (!isPro()) {
-          saveState({ ...state, aiExplainCount: (state.aiExplainCount || 0) + 1 });
-        }
       }
     } catch (e) {
       toast.error("Analiz yüklenemedi: " + (e as Error).message);

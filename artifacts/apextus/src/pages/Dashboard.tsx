@@ -2,7 +2,7 @@ import { useApp } from "@/contexts/AppContext";
 import { TREE } from "@/lib/data";
 
 export default function Dashboard() {
-  const { state, setCurrentPage, setQuizTarget, setNoteTarget, username, isPro } = useApp();
+  const { state, setCurrentPage, setQuizTarget, setNoteTarget, username } = useApp();
 
   const pct = state.total > 0 ? Math.round((state.correct / state.total) * 100) : 0;
   const studiedCount = Object.values(state.sr || {}).filter((v) => (v.studyCount || 0) > 0).length;
@@ -234,28 +234,6 @@ export default function Dashboard() {
       )}
 
       {/* Pro CTA */}
-      {!isPro() && (
-        <div
-          style={{
-            background: "linear-gradient(135deg,rgba(232,83,74,.1),rgba(167,139,250,.07))",
-            border: "1px solid rgba(232,83,74,.2)", borderRadius: 14, padding: "22px 22px",
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            flexWrap: "wrap", gap: 12,
-          }}
-        >
-          <div>
-            <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.1rem", fontWeight: 700, color: "var(--cream)" }}>
-              Apex Pro ile tam potansiyelini aç
-            </div>
-            <div style={{ fontSize: ".78rem", color: "var(--t2)", marginTop: 4 }}>
-              Sınırsız soru · Tüm konu notları · Klinik Analizler · Kişisel Çalışma Planı
-            </div>
-          </div>
-          <button className="btn btn-primary" onClick={() => setCurrentPage("pricing")}>
-            Planları Gör →
-          </button>
-        </div>
-      )}
 
       <style>{`
         @media (max-width: 768px) {

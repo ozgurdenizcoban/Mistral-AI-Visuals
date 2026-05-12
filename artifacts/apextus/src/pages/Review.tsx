@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
-import { TREE, SR_INTERVALS, FREE_LIMITS } from "@/lib/data";
+import { TREE, SR_INTERVALS } from "@/lib/data";
 import { mistralText } from "@/lib/mistral";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 import type { SREntry } from "@/contexts/AppContext";
 
 export default function Review() {
-  const { state, saveState, setNoteTarget, setCurrentPage, isPro, checkLimit } = useApp();
+  const { state, saveState, setNoteTarget, setCurrentPage } = useApp();
   const [planLoading, setPlanLoading] = useState(false);
   const [planHtml, setPlanHtml] = useState<string | null>(null);
   const [tusDate, setTusDate] = useState("");
@@ -54,11 +54,6 @@ export default function Review() {
   }
 
   async function generatePlan() {
-    if (!isPro()) {
-      toast.error("AI çalışma planı Pro özelliğidir.");
-      setCurrentPage("pricing");
-      return;
-    }
     if (!tusDate) { toast.error("Lütfen TUS tarihini seçin"); return; }
     const tusDateObj = new Date(tusDate);
     if (tusDateObj <= new Date()) { toast.error("TUS tarihi bugünden ileri olmalı"); return; }
@@ -202,7 +197,7 @@ EN SON:
       {/* AI Study Plan */}
       <div className="card">
         <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 14 }}>
-          ✦ AI Çalışma Planı {!isPro() && <span style={{ color: "var(--ac)", marginLeft: 6 }}>— PRO</span>}
+          ✦ AI Çalışma Planı
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
@@ -254,22 +249,11 @@ EN SON:
         <button
           className="btn btn-primary"
           onClick={generatePlan}
-          disabled={planLoading || !isPro()}
+          disabled={planLoading}
         >
           {planLoading ? <><span className="spin" />Plan Hazırlanıyor...</> : "✦ AI Plan Oluştur"}
         </button>
 
-        {!isPro() && (
-          <div style={{ marginTop: 10, fontSize: ".76rem", color: "var(--t2)" }}>
-            AI çalışma planı sadece Pro kullanıcılara açıktır.{" "}
-            <button
-              style={{ background: "none", border: "none", color: "var(--ac)", cursor: "pointer", fontWeight: 700 }}
-              onClick={() => setCurrentPage("pricing")}
-            >
-              Planları gör →
-            </button>
-          </div>
-        )}
 
         {planHtml && (
           <div style={{ marginTop: 20 }}>

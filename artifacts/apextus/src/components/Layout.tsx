@@ -7,7 +7,6 @@ import Quiz from "@/pages/Quiz";
 import Notes from "@/pages/Notes";
 import Stats from "@/pages/Stats";
 import Review from "@/pages/Review";
-import Pricing from "@/pages/Pricing";
 import Account from "@/pages/Account";
 
 export default function Layout() {
@@ -34,7 +33,6 @@ export default function Layout() {
     notes: <Notes />,
     stats: <Stats />,
     review: <Review />,
-    pricing: <Pricing />,
     account: <Account />,
   };
 

@@ -17,6 +17,7 @@ export default function Notes() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [studyAdd, setStudyAdd] = useState(1);
   const [bgRegenCount, setBgRegenCount] = useState(0);
+  const [bulkSync, setBulkSync] = useState<{ running: boolean; done: number; total: number; errors: number } | null>(null);
 
   const noteRef = useRef<HTMLDivElement>(null);
   const activeTopicRef = useRef<{ cat: string; icon: string; topic: string } | null>(null);
@@ -195,6 +196,45 @@ export default function Notes() {
     }
   }
 
+  async function runBulkSync() {
+    if (bulkSync?.running) return;
+    const allTopics = TREE.flatMap((b) => b.topics.map((t) => ({ cat: b.cat, icon: b.icon, topic: t })));
+    setBulkSync({ running: true, done: 0, total: allTopics.length, errors: 0 });
+    let done = 0;
+    let errors = 0;
+    const BATCH = 3;
+    for (let i = 0; i < allTopics.length; i += BATCH) {
+      const batch = allTopics.slice(i, i + BATCH);
+      await Promise.all(
+        batch.map(async ({ cat, icon: _icon, topic }) => {
+          try {
+            const cached = await fbGetNote(topic);
+            if (cached?.html && cached.html.includes('class="edu-diagram"')) {
+              // Already up to date — skip
+            } else {
+              const [html, linkHtml] = await Promise.all([
+                mistralText(buildNotePrompt(cat, topic), 24000, 0.35),
+                mistralText(buildLinkPrompt(cat, topic), 5000, 0.4),
+              ]);
+              const cleanHtml = cleanContent(html);
+              const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
+              const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
+              noteCache[topic] = full;
+              if (activeTopicRef.current?.topic === topic) setNoteHtml(full);
+              await fbSaveNote(topic, cleanHtml, cleanLink, []);
+            }
+          } catch (_) {
+            errors++;
+          }
+          done++;
+          setBulkSync({ running: true, done, total: allTopics.length, errors });
+        })
+      );
+    }
+    setBulkSync({ running: false, done, total: allTopics.length, errors });
+    toast.success(`Tüm notlar güncellendi! (${done - errors} başarılı${errors ? `, ${errors} hata` : ""})`);
+  }
+
   async function regenerateNoteInBackground(cat: string, icon: string, topic: string) {
     if (bgRegenRef.current.has(topic)) return;
     bgRegenRef.current.add(topic);
@@ -265,17 +305,38 @@ export default function Notes() {
     <div style={{ display: "flex", gap: 18, minHeight: "70vh" }}>
       {/* Sidebar */}
       <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6 }} className="notes-sidebar">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.15rem", fontWeight: 900, color: "var(--cream)" }}>
-            Konu Notları
-          </div>
-          {bgRegenCount > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: ".6rem", color: "var(--teal)", background: "var(--td)", padding: "2px 7px", borderRadius: 20, fontFamily: "Syne, sans-serif", fontWeight: 700 }}>
-              <span className="spin" style={{ width: 7, height: 7, borderWidth: 1.5 }} />
-              {bgRegenCount} güncelleniyor
-            </span>
-          )}
+        <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.15rem", fontWeight: 900, color: "var(--cream)", marginBottom: 8 }}>
+          Konu Notları
         </div>
+
+        {/* Bulk sync button + progress */}
+        {bulkSync?.running ? (
+          <div style={{ background: "var(--td)", borderRadius: 9, padding: "8px 10px", marginBottom: 8, fontSize: ".7rem", fontFamily: "Syne, sans-serif" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--teal)", fontWeight: 700, marginBottom: 4 }}>
+              <span className="spin" style={{ width: 8, height: 8, borderWidth: 1.5 }} />
+              Notlar güncelleniyor...
+            </div>
+            <div style={{ color: "var(--t2)" }}>{bulkSync.done} / {bulkSync.total} konu</div>
+            <div className="progress-bar" style={{ marginTop: 5 }}>
+              <div className="progress-fill" style={{ width: `${Math.round((bulkSync.done / bulkSync.total) * 100)}%`, background: "var(--teal)" }} />
+            </div>
+          </div>
+        ) : (
+          <button
+            className="btn btn-ghost sm"
+            style={{ width: "100%", justifyContent: "center", fontSize: ".72rem", marginBottom: 8 }}
+            onClick={runBulkSync}
+          >
+            {bulkSync ? `✓ ${bulkSync.done} not güncellendi` : "⟳ Tüm Notları Güncelle"}
+          </button>
+        )}
+
+        {bgRegenCount > 0 && (
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: ".6rem", color: "var(--teal)", background: "var(--td)", padding: "2px 7px", borderRadius: 20, fontFamily: "Syne, sans-serif", fontWeight: 700, marginBottom: 6 }}>
+            <span className="spin" style={{ width: 7, height: 7, borderWidth: 1.5 }} />
+            {bgRegenCount} arka planda güncelleniyor
+          </span>
+        )}
 
         {TREE.map((b) => (
           <div key={b.cat}>

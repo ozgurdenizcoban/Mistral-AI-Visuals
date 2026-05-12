@@ -9,7 +9,6 @@ const NAV_ITEMS = [
   { id: "notes", icon: "📚", label: "Konu Notları" },
   { id: "review", icon: "⏰", label: "Tekrar Planı" },
   { id: "stats", icon: "📊", label: "İstatistikler" },
-  { id: "pricing", icon: "💎", label: "Planlar" },
   { id: "account", icon: "⚙", label: "Hesap" },
 ];
 
@@ -19,7 +18,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const { currentPage, setCurrentPage, user, username, isPro, state } = useApp();
+  const { currentPage, setCurrentPage, user, username, state } = useApp();
 
   function goTo(page: string) {
     setCurrentPage(page);
@@ -96,11 +95,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               {username || "Kullanıcı"}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              {isPro() ? (
-                <span className="tag tag-gold" style={{ fontSize: ".55rem" }}>PRO</span>
-              ) : (
-                <span className="tag tag-gray" style={{ fontSize: ".55rem" }}>Ücretsiz</span>
-              )}
               {state.streak > 0 && (
                 <span style={{ fontSize: ".6rem", color: "var(--gold)", fontWeight: 800 }}>
                   🔥 {state.streak}g
