@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { id: "quiz", icon: "📋", label: "Klinik Quiz" },
   { id: "mockexam", icon: "🎯", label: "Deneme Sınavı" },
   { id: "tusscore", icon: "📈", label: "TUS Simülatörü" },
+  { id: "fulltus", icon: "🎓", label: "Gerçek TUS Denemesi" },
   { id: "notes", icon: "📚", label: "Konu Notları" },
   { id: "review", icon: "⏰", label: "Tekrar Planı" },
   { id: "stats", icon: "📊", label: "İstatistikler" },

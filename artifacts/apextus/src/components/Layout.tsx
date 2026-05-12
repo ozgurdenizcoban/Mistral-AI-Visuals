@@ -10,6 +10,7 @@ import Review from "@/pages/Review";
 import Account from "@/pages/Account";
 import MockExam from "@/pages/MockExam";
 import TusScore from "@/pages/TusScore";
+import FullTUS from "@/pages/FullTUS";
 
 export default function Layout() {
   const { user, loading, currentPage } = useApp();
@@ -34,6 +35,7 @@ export default function Layout() {
     quiz: <Quiz />,
     mockexam: <MockExam />,
     tusscore: <TusScore />,
+    fulltus: <FullTUS />,
     notes: <Notes />,
     stats: <Stats />,
     review: <Review />,

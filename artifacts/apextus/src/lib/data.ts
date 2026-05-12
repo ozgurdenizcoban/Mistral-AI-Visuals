@@ -164,3 +164,18 @@ export const LINK_MAP: Record<string, LinkEntry[]> = {
 };
 
 export const ADMIN_EMAILS = ["seninmail@gmail.com", "ozgurdenizzcoban@gmail.com"];
+
+/* TUS Klinik Bilimler dahiliye soru dağılımı (100 Klinik sorudan dahiliye payı) */
+export const TUS_KLINIK_WEIGHTS: Record<string, number> = {
+  "Kardiyoloji": 9,
+  "Göğüs Hastalıkları": 7,
+  "Hematoloji": 6,
+  "Nefroloji": 6,
+  "Endokrinoloji": 8,
+  "Gastroenteroloji": 6,
+  "Hepatoloji": 5,
+  "Romatoloji": 5,
+  "Enfeksiyon Hastalıkları": 7,
+  "Onkoloji": 4,
+  "Geriatri": 3,
+};

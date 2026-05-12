@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
-import { TREE, soruTipleri } from "@/lib/data";
+import { TREE, soruTipleri, TUS_KLINIK_WEIGHTS } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, QuizQuestion } from "@/lib/firestore";
 import { toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
@@ -46,11 +46,30 @@ export default function MockExam() {
   function selectAll() { setSelectedCats(TREE.map((b) => b.cat)); }
   function clearAll() { setSelectedCats([]); }
 
+  /* ---- TUS ağırlıklı dağılım hesapla ---- */
+  function buildWeightedDist(): Record<string, number> {
+    const totalWeight = selectedCats.reduce((s, c) => s + (TUS_KLINIK_WEIGHTS[c] || 5), 0);
+    const dist: Record<string, number> = {};
+    let assigned = 0;
+    for (let i = 0; i < selectedCats.length; i++) {
+      const cat = selectedCats[i];
+      const isLast = i === selectedCats.length - 1;
+      if (isLast) {
+        dist[cat] = Math.max(1, totalCount - assigned);
+      } else {
+        const count = Math.max(1, Math.round((TUS_KLINIK_WEIGHTS[cat] || 5) / totalWeight * totalCount));
+        dist[cat] = count;
+        assigned += count;
+      }
+    }
+    return dist;
+  }
+
   /* ---- generate ---- */
   async function startExam() {
     if (selectedCats.length === 0) { toast.error("En az bir kategori seçin"); return; }
 
-    const perCat = Math.max(1, Math.floor(totalCount / selectedCats.length));
+    const dist = buildWeightedDist();
     const allQs: Q[] = [];
 
     setGenProgress({ done: 0, total: selectedCats.length, cat: "" });
@@ -61,8 +80,8 @@ export default function MockExam() {
       const catIcon = TREE.find((b) => b.cat === cat)?.icon || "";
       setGenProgress({ done: i, total: selectedCats.length, cat: `${catIcon} ${cat}` });
 
-      const needed = i === selectedCats.length - 1 ? totalCount - allQs.length : perCat;
-      if (needed <= 0) break;
+      const needed = dist[cat] ?? 1;
+      if (needed <= 0) continue;
 
       try {
         const cached = await fbGetQuestions(cat, diff, needed, state.seenQ || {});
