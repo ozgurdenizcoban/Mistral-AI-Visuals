@@ -2,16 +2,20 @@ import { useState } from "react";
 import { signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
-import { fbSaveUserData } from "@/lib/firestore";
+import { fbSaveProfile } from "@/lib/firestore";
 import { toast } from "sonner";
 import { ADMIN_EMAILS } from "@/lib/data";
 
 export default function Account() {
-  const { user, username, state, saveState, isPro } = useApp();
+  const { user, username, setUsername, state, saveState, isPro } = useApp();
   const [tab, setTab] = useState<"profile" | "security" | "data" | "admin">("profile");
   const [oldPass, setOldPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [passLoading, setPassLoading] = useState(false);
+
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(username || "");
+  const [nameSaving, setNameSaving] = useState(false);
 
   // Admin: set plan
   const [adminUid, setAdminUid] = useState("");
@@ -20,6 +24,29 @@ export default function Account() {
   const [adminLoading, setAdminLoading] = useState(false);
 
   const isAdmin = ADMIN_EMAILS.includes(user?.email || "");
+
+  async function handleSaveName(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = nameInput.trim();
+    if (!trimmed || !user) return;
+    if (trimmed.length < 2) { toast.error("İsim en az 2 karakter olmalı"); return; }
+    setNameSaving(true);
+    try {
+      await fbSaveProfile(user.uid, {
+        name: trimmed,
+        username: trimmed,
+        email: user.email || "",
+        createdAt: new Date().toISOString(),
+      });
+      setUsername(trimmed);
+      setEditingName(false);
+      toast.success("İsim güncellendi");
+    } catch (e) {
+      toast.error("İsim kaydedilemedi: " + (e as Error).message);
+    } finally {
+      setNameSaving(false);
+    }
+  }
 
   async function handlePassChange(e: React.FormEvent) {
     e.preventDefault();
@@ -114,38 +141,63 @@ export default function Account() {
       {tab === "profile" && (
         <div>
           <div className="acc-section">
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
+            {/* Avatar + name */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
               <div style={{
                 width: 56, height: 56, borderRadius: "50%",
                 background: "linear-gradient(135deg,var(--teal),var(--blue))",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "1.4rem", fontWeight: 800, color: "var(--ink)",
+                fontSize: "1.4rem", fontWeight: 800, color: "var(--ink)", flexShrink: 0,
               }}>
                 {(username?.[0] ?? "U").toUpperCase()}
               </div>
-              <div>
-                <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.2rem", fontWeight: 700, color: "var(--cream)" }}>
-                  {username || "Kullanıcı"}
-                </div>
-                <div style={{ fontSize: ".75rem", color: "var(--t2)", marginTop: 2 }}>{user?.email}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {editingName ? (
+                  <form onSubmit={handleSaveName} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      className="auth-input"
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      placeholder="Adınız"
+                      autoFocus
+                      style={{ margin: 0, flex: 1 }}
+                    />
+                    <button className="btn btn-primary sm" type="submit" disabled={nameSaving}>
+                      {nameSaving ? <span className="spin" /> : "✓"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost sm"
+                      onClick={() => { setEditingName(false); setNameInput(username || ""); }}
+                    >
+                      ✕
+                    </button>
+                  </form>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div>
+                      <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.15rem", fontWeight: 700, color: "var(--cream)" }}>
+                        {username || "Kullanıcı"}
+                      </div>
+                      <div style={{ fontSize: ".75rem", color: "var(--t2)", marginTop: 2 }}>{user?.email}</div>
+                    </div>
+                    <button
+                      className="btn btn-ghost sm"
+                      onClick={() => { setEditingName(true); setNameInput(username || ""); }}
+                      style={{ marginLeft: 4, fontSize: ".72rem" }}
+                    >
+                      ✎ Düzenle
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
+            {/* Stats grid */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <div>
                 <div className="acc-label">E-posta</div>
                 <div className="acc-value">{user?.email || "—"}</div>
-              </div>
-              <div>
-                <div className="acc-label">Plan</div>
-                <div className="acc-value" style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  {isPro() ? (
-                    <span className="tag tag-gold">PRO</span>
-                  ) : (
-                    <span className="tag tag-gray">Ücretsiz</span>
-                  )}
-                  {state.planExpiry && <span style={{ fontSize: ".72rem", color: "var(--t2)" }}>→ {state.planExpiry}</span>}
-                </div>
               </div>
               <div>
                 <div className="acc-label">Toplam Soru</div>
@@ -273,7 +325,6 @@ export default function Account() {
           <div style={{ marginTop: 20, padding: "14px", background: "var(--ink3)", borderRadius: 9 }}>
             <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 8, textTransform: "uppercase" }}>Kendi Hesabın</div>
             <div style={{ fontSize: ".78rem", color: "var(--t2)" }}>UID: <code style={{ color: "var(--teal)", fontSize: ".72rem" }}>{user?.uid}</code></div>
-            <div style={{ fontSize: ".78rem", color: "var(--t2)", marginTop: 4 }}>Plan: {state.plan}</div>
           </div>
         </div>
       )}

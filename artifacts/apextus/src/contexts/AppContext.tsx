@@ -34,6 +34,7 @@ export interface AppState {
 interface AppContextValue {
   user: User | null;
   username: string;
+  setUsername: (name: string) => void;
   loading: boolean;
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
@@ -225,7 +226,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        user, username, loading, state, setState: setStateRaw, saveState,
+        user, username, setUsername, loading, state, setState: setStateRaw, saveState,
         isPro, checkLimit, markSeenQ, currentPage, setCurrentPage,
         noteTarget, setNoteTarget, quizTarget, setQuizTarget, fbReady,
       }}

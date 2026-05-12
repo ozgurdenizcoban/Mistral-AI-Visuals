@@ -8,6 +8,7 @@ import Notes from "@/pages/Notes";
 import Stats from "@/pages/Stats";
 import Review from "@/pages/Review";
 import Account from "@/pages/Account";
+import MockExam from "@/pages/MockExam";
 
 export default function Layout() {
   const { user, loading, currentPage } = useApp();
@@ -30,6 +31,7 @@ export default function Layout() {
   const pages: Record<string, React.ReactNode> = {
     dashboard: <Dashboard />,
     quiz: <Quiz />,
+    mockexam: <MockExam />,
     notes: <Notes />,
     stats: <Stats />,
     review: <Review />,
