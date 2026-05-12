@@ -17,8 +17,6 @@ export default function Notes() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [studyAdd, setStudyAdd] = useState(1);
   const [bgRegenCount, setBgRegenCount] = useState(0);
-  const [bulkSync, setBulkSync] = useState<{ running: boolean; done: number; total: number; errors: number; skipped: number } | null>(null);
-  const bulkStopRef = useRef(false);
 
   const noteRef = useRef<HTMLDivElement>(null);
   const activeTopicRef = useRef<{ cat: string; icon: string; topic: string } | null>(null);
@@ -197,59 +195,6 @@ export default function Notes() {
     }
   }
 
-  async function runBulkSync() {
-    if (bulkSync?.running) return;
-    bulkStopRef.current = false;
-    const allTopics = TREE.flatMap((b) => b.topics.map((t) => ({ cat: b.cat, icon: b.icon, topic: t })));
-    setBulkSync({ running: true, done: 0, total: allTopics.length, errors: 0, skipped: 0 });
-    let done = 0;
-    let errors = 0;
-    let skipped = 0;
-
-    for (const { cat, topic } of allTopics) {
-      if (bulkStopRef.current) break;
-
-      // Check if already up to date
-      let upToDate = false;
-      try {
-        const cached = await fbGetNote(topic);
-        if (cached?.html && cached.html.includes('class="edu-diagram"')) {
-          upToDate = true;
-          skipped++;
-        }
-      } catch (_) {}
-
-      if (!upToDate) {
-        let success = false;
-        for (let attempt = 0; attempt < 3 && !success; attempt++) {
-          try {
-            if (attempt > 0) await new Promise((r) => setTimeout(r, 6000 * attempt));
-            const html = await mistralText(buildNotePrompt(cat, topic), 24000, 0.35);
-            const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 5000, 0.4);
-            const cleanHtml = cleanContent(html);
-            const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
-            const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
-            noteCache[topic] = full;
-            if (activeTopicRef.current?.topic === topic) setNoteHtml(full);
-            await fbSaveNote(topic, cleanHtml, cleanLink, []);
-            success = true;
-          } catch (_) {
-            if (attempt === 2) errors++;
-          }
-        }
-      }
-
-      done++;
-      setBulkSync({ running: true, done, total: allTopics.length, errors, skipped });
-    }
-
-    setBulkSync({ running: false, done, total: allTopics.length, errors, skipped });
-    if (bulkStopRef.current) {
-      toast.info(`Durduruldu — ${done} / ${allTopics.length} işlendi`);
-    } else {
-      toast.success(`Tamamlandı! ${done - errors - skipped} yeni not + ${skipped} zaten güncel${errors ? ` · ${errors} hata` : ""}`);
-    }
-  }
 
   async function regenerateNoteInBackground(cat: string, icon: string, topic: string) {
     if (bgRegenRef.current.has(topic)) return;
@@ -324,42 +269,6 @@ export default function Notes() {
         <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.15rem", fontWeight: 900, color: "var(--cream)", marginBottom: 8 }}>
           Konu Notları
         </div>
-
-        {/* Bulk sync button + progress */}
-        {bulkSync?.running ? (
-          <div style={{ background: "var(--td)", borderRadius: 9, padding: "8px 10px", marginBottom: 8, fontSize: ".7rem", fontFamily: "Syne, sans-serif" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--teal)", fontWeight: 700 }}>
-                <span className="spin" style={{ width: 8, height: 8, borderWidth: 1.5 }} />
-                Güncelleniyor...
-              </div>
-              <button
-                style={{ background: "none", border: "1px solid rgba(232,83,74,.4)", borderRadius: 6, color: "var(--ac)", fontSize: ".6rem", padding: "1px 7px", cursor: "pointer", fontFamily: "Syne, sans-serif", fontWeight: 700 }}
-                onClick={() => { bulkStopRef.current = true; }}
-              >
-                Durdur
-              </button>
-            </div>
-            <div style={{ color: "var(--t2)", marginBottom: 4 }}>
-              {bulkSync.done} / {bulkSync.total}
-              {bulkSync.skipped > 0 && <span style={{ color: "var(--green)", marginLeft: 5 }}>✓ {bulkSync.skipped} atlandı</span>}
-              {bulkSync.errors > 0 && <span style={{ color: "var(--ac)", marginLeft: 5 }}>✗ {bulkSync.errors} hata</span>}
-            </div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${Math.round((bulkSync.done / bulkSync.total) * 100)}%`, background: "var(--teal)" }} />
-            </div>
-          </div>
-        ) : (
-          <button
-            className="btn btn-ghost sm"
-            style={{ width: "100%", justifyContent: "center", fontSize: ".72rem", marginBottom: 8 }}
-            onClick={runBulkSync}
-          >
-            {bulkSync
-              ? `✓ ${bulkSync.done - bulkSync.errors - bulkSync.skipped} yeni · ${bulkSync.skipped} güncel${bulkSync.errors ? ` · ${bulkSync.errors} hata` : ""}`
-              : "⟳ Tüm Notları Güncelle"}
-          </button>
-        )}
 
         {bgRegenCount > 0 && (
           <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: ".6rem", color: "var(--teal)", background: "var(--td)", padding: "2px 7px", borderRadius: 20, fontFamily: "Syne, sans-serif", fontWeight: 700, marginBottom: 6 }}>

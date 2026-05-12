@@ -19,7 +19,7 @@ async function mistralCall(
   _queueTail = mySlot;
 
   await prevTail;
-  await new Promise((r) => setTimeout(r, 1100));
+  await new Promise((r) => setTimeout(r, 200));
 
   try {
     const body: Record<string, unknown> = {
