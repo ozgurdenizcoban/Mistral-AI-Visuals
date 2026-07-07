@@ -3,6 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
+import { getSourceGuide } from "@/lib/sourceGuides";
 import { qFingerprint, toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -108,11 +109,13 @@ export default function Quiz() {
         : (TREE.find((b) => b.cat === activeCat)?.topics || []).sort(() => Math.random() - 0.5).slice(0, 4);
 
       const tiplar = soruTipleri.sort(() => Math.random() - 0.5).slice(0, Math.min(count, soruTipleri.length));
+      const sourceGuide = getSourceGuide(activeCat, topics);
 
       const prompt = `Sen deneyimli bir TUS sınavı hazırlayıcısısın. Aşağıdaki konu(lar) için TUS sınavına çıkabilecek kalitede ${count} soru üret.
 
 KATEGORİ: ${activeCat}
 KONULAR: ${topics.join(", ")}
+${sourceGuide}
 KALITE KURALLARI:
 - Sorular ezber degil klinik akil yurutme gerektirsin.
 - Her vakada yas, cinsiyet, basvuru, fizik muayene ve en az 2 laboratuvar/goruntuleme ipucu olsun.

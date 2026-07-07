@@ -4,6 +4,7 @@ import { TREE, LINK_MAP, SR_INTERVALS } from "@/lib/data";
 import { mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
 import { fetchMedicalImage, getTopicDiagramQuery } from "@/lib/imageGen";
+import { getSourceGuide } from "@/lib/sourceGuides";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -383,6 +384,8 @@ function buildNotePrompt(cat: string, topic: string): string {
 KONU: ${cat} — ${topic}
 
 ${PROFESSIONAL_NOTE_STANDARD}
+
+${getSourceGuide(cat, topic)}
 
 KESİN KURAL — ATLANAMAZ BİLGİLER:
 • Tam ilaç dozları (mg, yol, sıklık)
