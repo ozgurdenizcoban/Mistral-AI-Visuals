@@ -1,5 +1,6 @@
 import { useApp } from "@/contexts/AppContext";
 import { TREE } from "@/lib/data";
+import { getScoreSimulation, getTopicInsights } from "@/lib/studyInsights";
 
 export default function Dashboard() {
   const { state, setCurrentPage, setQuizTarget, setNoteTarget, username } = useApp();
@@ -11,6 +12,9 @@ export default function Dashboard() {
     if (!v.nextDate) return false;
     return v.nextDate <= new Date().toISOString().slice(0, 10);
   }).length;
+  const insights = getTopicInsights(state);
+  const weakFocus = insights.slice(0, 5);
+  const sim = getScoreSimulation(state, 90, 4, 65);
 
   const allTopics: { name: string; cat: string; icon: string; sc: number }[] = [];
   TREE.forEach((b) => b.topics.forEach((t) => {
@@ -24,6 +28,13 @@ export default function Dashboard() {
   function startQuiz(cat: string, topic = "") {
     setQuizTarget({ cat, topic });
     setCurrentPage("quiz");
+  }
+
+  function openNote(cat: string, topic: string) {
+    const branch = TREE.find((b) => b.cat === cat);
+    if (!branch) return;
+    setNoteTarget({ cat, icon: branch.icon, topic });
+    setCurrentPage("notes");
   }
 
   return (
@@ -118,6 +129,72 @@ export default function Dashboard() {
           >
             🎲 Karışık
           </button>
+        </div>
+      </div>
+
+      {/* Targeted weak analysis */}
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--ac)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+              Hedefli Zayıf Konu Analizi
+            </div>
+            <div style={{ color: "var(--t2)", fontSize: ".78rem", marginTop: 5 }}>
+              Hata, tekrar ve kategori başarısına göre bugünkü en yüksek getirili çalışma alanları.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span className="tag tag-teal">{sim.coveragePct}% konu kapsamı</span>
+            <span className="tag tag-gold">{sim.currentBand[0]}-{sim.currentBand[1]} tahmini band</span>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 14 }} className="g2">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {weakFocus.map((w, i) => (
+              <div key={w.topic} className="weak-action-row">
+                <div className="weak-rank">{i + 1}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                    <strong style={{ color: "var(--cream)", fontSize: ".84rem" }}>{w.topic}</strong>
+                    <span className="tag tag-gray">{w.cat}</span>
+                    {w.mistakes > 0 && <span className="tag tag-red">{w.mistakes} hata</span>}
+                  </div>
+                  <div style={{ color: "var(--t2)", fontSize: ".73rem", marginTop: 4, lineHeight: 1.55 }}>
+                    {w.reason}; öneri: {w.action}.
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <button className="btn btn-ghost sm" onClick={() => openNote(w.cat, w.topic)}>Not</button>
+                  <button className="btn btn-teal sm" onClick={() => startQuiz(w.cat, w.topic)}>Quiz</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="score-forecast">
+            <div style={{ fontSize: ".68rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+              90 Günlük Simülasyon
+            </div>
+            <div className="forecast-line">
+              <span>Şu an</span>
+              <strong>{sim.currentBand[0]}-{sim.currentBand[1]}</strong>
+            </div>
+            <div className="forecast-line">
+              <span>Planlı çalışma</span>
+              <strong style={{ color: "var(--green)" }}>{sim.expectedBand[0]}-{sim.expectedBand[1]}</strong>
+            </div>
+            <div className="forecast-line">
+              <span>Günlük hedef</span>
+              <strong>{sim.dailyQuestionTarget} soru</strong>
+            </div>
+            <div style={{ color: "var(--t2)", fontSize: ".73rem", lineHeight: 1.6, marginTop: 10 }}>
+              {sim.message}
+            </div>
+            <button className="btn btn-primary sm" style={{ marginTop: 12 }} onClick={() => setCurrentPage("review")}>
+              Profesyonel plan oluştur
+            </button>
+          </div>
         </div>
       </div>
 

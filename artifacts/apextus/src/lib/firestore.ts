@@ -52,6 +52,8 @@ export interface QuizQuestion {
   opts: string[];
   ans: number;
   exp: string;
+  visualHtml?: string;
+  visualCaption?: string;
   cat: string;
   diff: string;
   tags: string[];
@@ -100,6 +102,7 @@ export async function fbSaveQuestions(
       batch.set(ref, {
         vaka: q.vaka || "", soru: q.soru || "", opts: q.opts || [],
         ans: q.ans || 0, exp: q.exp || "", cat: q.cat || topic,
+        visualHtml: q.visualHtml || "", visualCaption: q.visualCaption || "",
         diff: q.diff || diff, tags: q.tags || [], createdAt: Date.now(),
       });
     });

@@ -90,7 +90,26 @@ export default function AuthOverlay() {
 
   return (
     <div className="auth-overlay">
-      <div style={{ maxWidth: 440, width: "100%" }}>
+      <div className="auth-shell">
+        <section className="auth-hero-panel">
+          <div className="auth-product-mark">APEXTUS</div>
+          <h1>AI destekli TUS hazırlığını ölç, planla, yükselt.</h1>
+          <p>
+            Klinik vaka soruları, zayıf konu analizi, hedef puan simülasyonu ve aralıklı tekrar sistemi tek çalışma ekranında.
+          </p>
+          <div className="auth-proof-grid">
+            <div><strong>110+</strong><span>TUS konusu</span></div>
+            <div><strong>AI</strong><span>klinik açıklama</span></div>
+            <div><strong>SM-2</strong><span>tekrar planı</span></div>
+          </div>
+          <div className="auth-feature-list">
+            <span>Klinik vaka formatında soru üretimi</span>
+            <span>Hedef puana göre günlük çalışma simülasyonu</span>
+            <span>Yanlışlardan otomatik zayıf konu haritası</span>
+          </div>
+        </section>
+
+        <section style={{ maxWidth: 440, width: "100%" }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div
@@ -184,6 +203,7 @@ export default function AuthOverlay() {
             WhatsApp
           </a>
         </div>
+        </section>
       </div>
     </div>
   );

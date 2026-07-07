@@ -10,6 +10,14 @@ interface Q extends QuizQuestion {
   _fid?: string;
 }
 
+function cleanVisualHtml(raw?: string) {
+  if (!raw) return "";
+  const s = raw.trim();
+  if (/script|iframe|object|embed|base64|https?:\/\//i.test(s)) return "";
+  if (!/(<svg[\s>]|quiz-ai-diagram)/i.test(s)) return "";
+  return s.slice(0, 5000);
+}
+
 export default function Quiz() {
   const { state, saveState, isPro, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
 
@@ -82,7 +90,11 @@ export default function Quiz() {
       const cachedKey = topic || activeCat;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
-        setQuestions(cached.slice(0, count));
+        setQuestions(cached.slice(0, count).map((q) => ({
+          ...q,
+          visualHtml: cleanVisualHtml(q.visualHtml),
+          visualCaption: (q.visualCaption || "").slice(0, 120),
+        })));
         markSeenQ(cached.map((q) => q._fid!).filter(Boolean));
         setLoading(false);
         if (timerMode) startTimer();
@@ -101,6 +113,13 @@ export default function Quiz() {
 
 KATEGORİ: ${activeCat}
 KONULAR: ${topics.join(", ")}
+KALITE KURALLARI:
+- Sorular ezber degil klinik akil yurutme gerektirsin.
+- Her vakada yas, cinsiyet, basvuru, fizik muayene ve en az 2 laboratuvar/goruntuleme ipucu olsun.
+- Secenekler birbirine yakin ama tek dogru olacak sekilde ayirici tani mantigiyla yazilsin.
+- TUS tuzaklari, esik degerleri, klasik bulgular ve tedavi algoritmalari kullanilsin.
+- Aciklama dogru cevabi ve en az 2 yanlis secenegin neden elendigini anlatsin.
+- Sorularin yaklasik %35'inde dis kaynak kullanmadan basit bir AI cizimi/sematik gorsel ver. visualHtml alanina yalnizca guvenli inline <svg> veya <div class="quiz-ai-diagram"> HTML'i koy. Fotograf, URL, base64 veya dis gorsel kullanma. Gorsel yoksa visualHtml bos string olsun.
 ZORLUK: ${diff}
 SORU TİPLERİ: ${tiplar.join(", ")}
 
@@ -132,6 +151,8 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
           ...q,
           opts: (q.opts || []).slice(0, 5),
           ans: Math.min(Math.max(0, q.ans || 0), (q.opts?.length || 5) - 1),
+          visualHtml: cleanVisualHtml(q.visualHtml),
+          visualCaption: (q.visualCaption || "").slice(0, 120),
         }))
         .filter((q) => {
           // Deduplicate within this batch using vaka first 60 chars + soru first 40 chars
@@ -403,6 +424,12 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
         </div>
 
         <div className="vbody">
+          {q.visualHtml && (
+            <figure className="quiz-clinical-img quiz-ai-visual">
+              <div dangerouslySetInnerHTML={{ __html: q.visualHtml }} />
+              {q.visualCaption && <figcaption className="quiz-clinical-cap">{q.visualCaption}</figcaption>}
+            </figure>
+          )}
           <div className="vnum">{current + 1}</div>
           <div className="vq">{q.vaka}</div>
           <div className="vsoru">{q.soru}</div>

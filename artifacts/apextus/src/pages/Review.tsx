@@ -5,6 +5,7 @@ import { mistralText } from "@/lib/mistral";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 import type { SREntry } from "@/contexts/AppContext";
+import { getScoreSimulation, getTopicInsights } from "@/lib/studyInsights";
 
 export default function Review() {
   const { state, saveState, setNoteTarget, setCurrentPage } = useApp();
@@ -12,6 +13,7 @@ export default function Review() {
   const [planHtml, setPlanHtml] = useState<string | null>(null);
   const [tusDate, setTusDate] = useState("");
   const [hoursPerDay, setHoursPerDay] = useState(4);
+  const [targetScore, setTargetScore] = useState(65);
   const [strategy, setStrategy] = useState<"dengeli" | "zayif" | "guclu">("dengeli");
 
   const today = toDay();
@@ -29,6 +31,11 @@ export default function Review() {
   const dueTodayList = allTopics.filter((t) => t.due);
   const upcomingList = allTopics.filter((t) => !t.due && t.sr?.nextDate);
   const completedList = allTopics.filter((t) => t.sr?.studyCount && !t.sr?.nextDate);
+  const previewDaysLeft = tusDate
+    ? Math.max(1, Math.round((new Date(tusDate).getTime() - Date.now()) / 86400000))
+    : 90;
+  const simulation = getScoreSimulation(state, previewDaysLeft, hoursPerDay, targetScore);
+  const topWeakInsights = getTopicInsights(state).slice(0, 8);
 
   function openNote(topic: string) {
     const branch = TREE.find((b) => b.topics.includes(topic));
@@ -58,6 +65,7 @@ export default function Review() {
     const tusDateObj = new Date(tusDate);
     if (tusDateObj <= new Date()) { toast.error("TUS tarihi bugünden ileri olmalı"); return; }
     const daysLeft = Math.max(0, Math.round((tusDateObj.getTime() - Date.now()) / 86400000));
+    const sim = getScoreSimulation(state, daysLeft, hoursPerDay, targetScore);
 
     setPlanLoading(true);
     const topicData: { konu: string; kategori: string; tekrar: number }[] = [];
@@ -67,6 +75,11 @@ export default function Review() {
 
     const strategyLabel = { dengeli: "Dengeli", zayif: "Zayıf konulara ağırlık", guclu: "Güçlü konuları pekiştir" }[strategy];
     const priorityList = topicData.sort((a, b) => a.tekrar - b.tekrar).slice(0, 30).map((t, i) => `${i + 1}. ${t.konu} (${t.kategori}) | geçmiş: ${t.tekrar}x`).join("\n");
+
+    const weakPriorityList = getTopicInsights(state)
+      .slice(0, 35)
+      .map((t, i) => `${i + 1}. ${t.topic} (${t.cat}) | hata: ${t.mistakes} | tekrar: ${t.studyCount}x | neden: ${t.reason}`)
+      .join("\n");
 
     const weeksToShow = Math.min(Math.max(1, Math.ceil(daysLeft / 7)), 12);
     const h = hoursPerDay;
@@ -78,9 +91,22 @@ export default function Review() {
 TUS tarihi: ${daysLeft} gün kaldı (yaklaşık ${weeksToShow} hafta)
 Günlük çalışma: ${h} saat
 Strateji: ${strategyLabel}
+Hedef puan: ${targetScore}
+Mevcut tahmini puan bandi: ${sim.currentBand[0]}-${sim.currentBand[1]}
+Plan uygulanirsa beklenen band: ${sim.expectedBand[0]}-${sim.expectedBand[1]}
+Stretch hedef bandi: ${sim.stretchBand[0]}-${sim.stretchBand[1]}
+Konu kapsami: ${sim.studiedTopics}/${sim.totalTopics} (%${sim.coveragePct})
+Gunluk soru hedefi: ${sim.dailyQuestionTarget}
+Gunluk tekrar hedefi: ${sim.dailyReviewTarget}
+Zayif konu sayisi: ${sim.weakTopicCount}
 
 === ÖNCELİK SIRASI (En az çalışılmış) ===
 ${priorityList}
+
+=== PROFESYONEL RISK SIRASI (Hata + tekrar + kategori performansi) ===
+${weakPriorityList}
+
+Planin basinda hedef puan simulasyonu, beklenen puan bandi, en kritik zayif halkalar tablosu ve gunluk soru/tekrar hedeflerini mutlaka HTML olarak ver.
 
 === ÇIKTI FORMATI (SADECE HTML, markdown yok) ===
 <h3>Genel Değerlendirme ve Plan Stratejisi</h3>
@@ -200,7 +226,7 @@ EN SON:
           ✦ AI Çalışma Planı
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }} className="plan-controls">
           <div>
             <div style={{ fontSize: ".7rem", fontWeight: 800, color: "var(--t3)", marginBottom: 6, textTransform: "uppercase" }}>TUS Tarihi</div>
             <input
@@ -244,6 +270,47 @@ EN SON:
               <option value="guclu">Güçlü konuları pekiştir</option>
             </select>
           </div>
+          <div>
+            <div style={{ fontSize: ".7rem", fontWeight: 800, color: "var(--t3)", marginBottom: 6, textTransform: "uppercase" }}>Hedef Puan</div>
+            <input
+              type="number"
+              min={35}
+              max={90}
+              value={targetScore}
+              onChange={(e) => setTargetScore(Math.max(35, Math.min(90, parseInt(e.target.value) || 65)))}
+              style={{
+                width: "100%", padding: "8px 10px", background: "var(--ink3)",
+                border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)",
+                fontFamily: "Syne, sans-serif", fontSize: ".82rem",
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="score-sim-card">
+          <div>
+            <div style={{ fontSize: ".68rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+              Hedefe Yönelik Simülasyon
+            </div>
+            <div style={{ color: "var(--t2)", fontSize: ".76rem", marginTop: 6, lineHeight: 1.55 }}>
+              {simulation.message}
+            </div>
+          </div>
+          <div className="score-sim-grid">
+            <div><span>Şu an</span><strong>{simulation.currentBand[0]}-{simulation.currentBand[1]}</strong></div>
+            <div><span>Planla</span><strong>{simulation.expectedBand[0]}-{simulation.expectedBand[1]}</strong></div>
+            <div><span>Günlük</span><strong>{simulation.dailyQuestionTarget} soru</strong></div>
+            <div><span>Tekrar</span><strong>{simulation.dailyReviewTarget} konu</strong></div>
+          </div>
+        </div>
+
+        <div className="weak-mini-list">
+          {topWeakInsights.slice(0, 4).map((w) => (
+            <div key={w.topic}>
+              <strong>{w.topic}</strong>
+              <span>{w.reason}</span>
+            </div>
+          ))}
         </div>
 
         <button
