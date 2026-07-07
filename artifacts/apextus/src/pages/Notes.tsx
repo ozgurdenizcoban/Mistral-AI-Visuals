@@ -367,10 +367,21 @@ export default function Notes() {
   );
 }
 
+const PROFESSIONAL_NOTE_STANDARD = `PROFESYONEL NOT STANDARDI:
+- Bu not, TUS'a hazirlanan bir hekim adayinin ana kaynak gibi kullanabilecegi derinlikte olsun.
+- Konuyu once temel mekanizma, sonra klinik yansima, sonra TUS'ta sorulma bicimi seklinde anlat.
+- Her baslikta "Neden onemli?", "TUS nasil sorar?", "Karistirilan nokta" mantigi bulunsun.
+- Temel bilim konularinda: embriyolojik koken, histolojik ozellik, biyokimyasal yolak, reseptor/enzim, farmakolojik hedef ve patoloji baglantisini kur.
+- Klinik bilim konularinda: tani algoritmasi, ayirici tani, ilk islem, en iyi test, kesin tani, tedavi basamaklari, kontrendikasyon ve komplikasyonlari belirt.
+- Her notta en az 8 TUS spotu, 1 klinik vaka ornegi, 1 ayirici tani tablosu, 1 tani/tedavi algoritmasi ve 1 yanlis tuzagi bolumu olsun.
+- Sayisal esikler, skorlar, dozlar, laboratuvar referanslari ve klasik bulgular atlanmasin.
+- Gereksiz genel kultur anlatimi yapma; sinavda puan getirecek bilgiye yogunlas.`;
 function buildNotePrompt(cat: string, topic: string): string {
-  return `Sen kıdemli bir dahiliye akademisyenisin ve TUS sınavı uzmanısın. Aşağıdaki konu için TUS'ta çıkabilecek HİÇBİR BİLGİYİ ATLAMAMAK şartıyla tam ve kapsamlı bir konu notu hazırla.
+  return `Sen kıdemli bir TUS akademisyeni ve ders notu editörüsün. Aşağıdaki konu için TUS'ta çıkabilecek HİÇBİR BİLGİYİ ATLAMAMAK şartıyla tam, profesyonel ve kapsamlı bir konu notu hazırla.
 
 KONU: ${cat} — ${topic}
+
+${PROFESSIONAL_NOTE_STANDARD}
 
 KESİN KURAL — ATLANAMAZ BİLGİLER:
 • Tam ilaç dozları (mg, yol, sıklık)
@@ -528,13 +539,16 @@ ZORUNLU BÖLÜMLER:
 }
 
 function buildLinkPrompt(cat: string, topic: string): string {
-  return `Dahiliye uzmanı olarak şu konu için KLİNİK BAĞLANTI NOTLARI hazırla.
+  return `TUS akademisyeni olarak şu konu için KLİNİK BAĞLANTI NOTLARI hazırla.
 KONU: ${cat} — ${topic}
 
-GÖREV: Bu konuyla AYNI belirti/bulgu/mekanizmayı PAYLAŞAN diğer dahiliye hastalıklarını listele.
+${PROFESSIONAL_NOTE_STANDARD}
+
+GÖREV: Bu konuyla AYNI belirti, bulgu, mekanizma, yolak, ilaç hedefi veya patolojik süreci paylaşan diğer TUS konularını listele.
 
 SADECE HTML döndür:
 <div class="tip"><strong>🔗 [PAYLAŞILAN BULGU]: </strong><ul><li><strong>Hastalık:</strong> neden aynı bulguda düşünülmeli + ayırt eden özellik</li></ul></div>
 
 En az 4, en fazla 6 farklı paylaşımlı bulgu ver. Sadece HTML yaz:`;
 }
+

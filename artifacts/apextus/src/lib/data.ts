@@ -92,6 +92,93 @@ export const TREE: TreeBranch[] = [
       "Gram Negatif Kokobasil Enfeksiyonları",
     ],
   },
+  {
+    cat: "Anatomi", icon: "🧠", topics: [
+      "Üst Ekstremite Anatomisi", "Alt Ekstremite Anatomisi", "Toraks Anatomisi",
+      "Abdomen Anatomisi", "Pelvis ve Perine Anatomisi", "Baş-Boyun Anatomisi",
+      "Nöroanatomi", "Kraniyal Sinirler", "Damar ve Lenfatik Anatomi", "Kesitsel Anatomi",
+    ],
+  },
+  {
+    cat: "Histoloji ve Embriyoloji", icon: "🔬", topics: [
+      "Hücre ve Epitel Dokusu", "Bağ Dokusu, Kıkırdak ve Kemik", "Kas ve Sinir Dokusu",
+      "Kan ve Hematopoez Histolojisi", "Dolaşım ve Solunum Sistemi Histolojisi",
+      "Gastrointestinal Sistem Histolojisi", "Ürogenital Sistem Histolojisi",
+      "Endokrin Sistem Histolojisi", "Genel Embriyoloji", "Organogenez ve Konjenital Anomaliler",
+    ],
+  },
+  {
+    cat: "Fizyoloji", icon: "⚡", topics: [
+      "Hücre Fizyolojisi ve Membran Potansiyeli", "Kas Fizyolojisi", "Sinir Sistemi Fizyolojisi",
+      "Kardiyovasküler Fizyoloji", "Solunum Fizyolojisi", "Böbrek Fizyolojisi",
+      "Gastrointestinal Fizyoloji", "Endokrin ve Üreme Fizyolojisi", "Kan Fizyolojisi",
+      "Asit-Baz ve Sıvı-Elektrolit Fizyolojisi",
+    ],
+  },
+  {
+    cat: "Biyokimya", icon: "🧪", topics: [
+      "Proteinler ve Enzimler", "Karbonhidrat Metabolizması", "Lipid Metabolizması",
+      "Aminoasit Metabolizması", "Nükleotid Metabolizması", "Vitaminler ve Mineraller",
+      "Moleküler Biyoloji ve Genetik", "Hormon Biyokimyası", "Klinik Biyokimya",
+      "Metabolik Hastalıklar",
+    ],
+  },
+  {
+    cat: "Mikrobiyoloji", icon: "🦠", topics: [
+      "Bakteriyoloji Temelleri", "Gram Pozitif Bakteriler", "Gram Negatif Bakteriler",
+      "Mikobakteriler ve Spiroketler", "Viroloji Temelleri", "DNA ve RNA Virüsleri",
+      "Mikoloji", "Parazitoloji", "İmmünoloji", "Aşılar ve Antimikrobiyal Direnç",
+    ],
+  },
+  {
+    cat: "Patoloji", icon: "🧫", topics: [
+      "Hücre Zedelenmesi ve Adaptasyon", "İnflamasyon ve Onarım", "Hemodinamik Bozukluklar",
+      "Neoplazi", "İmmünopatoloji", "Genetik ve Pediatrik Patoloji",
+      "Kardiyovasküler Sistem Patolojisi", "Solunum Sistemi Patolojisi",
+      "Gastrointestinal ve Hepatobilier Patoloji", "Renal ve Ürogenital Patoloji",
+      "Endokrin, Meme ve Kadın Genital Patolojisi", "Santral Sinir Sistemi Patolojisi",
+    ],
+  },
+  {
+    cat: "Farmakoloji", icon: "💊", topics: [
+      "Farmakokinetik ve Farmakodinamik", "Otonom Sinir Sistemi İlaçları",
+      "Kardiyovasküler Sistem İlaçları", "Santral Sinir Sistemi İlaçları",
+      "Antimikrobiyal İlaçlar", "Antineoplastik İlaçlar", "Endokrin Farmakoloji",
+      "Solunum ve Gastrointestinal Sistem İlaçları", "NSAİİ ve İmmünmodülatörler",
+      "Toksikoloji ve İlaç Etkileşimleri",
+    ],
+  },
+  {
+    cat: "Pediatri", icon: "🧸", topics: [
+      "Yenidoğan Hastalıkları", "Büyüme ve Gelişme", "Çocuk Enfeksiyon Hastalıkları",
+      "Pediatrik Kardiyoloji", "Pediatrik Solunum Hastalıkları", "Pediatrik Gastroenteroloji",
+      "Pediatrik Nefroloji", "Pediatrik Hematoloji ve Onkoloji", "Pediatrik Endokrinoloji",
+      "Çocuk Nörolojisi", "Aşılar ve Sağlam Çocuk İzlemi", "Çocuk Acilleri",
+    ],
+  },
+  {
+    cat: "Genel Cerrahi", icon: "🩺", topics: [
+      "Travma ve Şok", "Sıvı-Elektrolit ve Asit-Baz Cerrahisi", "Yara İyileşmesi ve Cerrahi Enfeksiyon",
+      "Meme Hastalıkları", "Tiroid ve Paratiroid Cerrahisi", "Özofagus ve Mide Cerrahisi",
+      "İnce Barsak ve Kolon Cerrahisi", "Hepatobilier Sistem Cerrahisi", "Pankreas Cerrahisi",
+      "Akut Batın", "Herniler", "Yanıklar ve Transplantasyon",
+    ],
+  },
+  {
+    cat: "Kadın Hastalıkları ve Doğum", icon: "🤰", topics: [
+      "Normal Gebelik ve Prenatal İzlem", "Gebelik Komplikasyonları", "Hipertansif Gebelik Hastalıkları",
+      "Obstetrik Kanamalar", "Doğum Eylemi ve Distosiler", "Puerperium ve Laktasyon",
+      "Jinekolojik Enfeksiyonlar", "Menstrüel Siklus Bozuklukları", "İnfertilite",
+      "Kontrasepsiyon", "Jinekolojik Onkoloji", "Ürojinekoloji",
+    ],
+  },
+  {
+    cat: "Küçük Stajlar", icon: "🧭", topics: [
+      "Nöroloji", "Psikiyatri", "Dermatoloji", "Halk Sağlığı", "Adli Tıp",
+      "Ortopedi ve Travmatoloji", "Üroloji", "Kulak Burun Boğaz", "Göz Hastalıkları",
+      "Anesteziyoloji ve Reanimasyon", "Radyoloji", "Fizik Tedavi ve Rehabilitasyon",
+    ],
+  },
 ];
 
 export const soruTipleri = [
@@ -178,4 +265,15 @@ export const TUS_KLINIK_WEIGHTS: Record<string, number> = {
   "Enfeksiyon Hastalıkları": 7,
   "Onkoloji": 4,
   "Geriatri": 3,
+  "Pediatri": 30,
+  "Genel Cerrahi": 25,
+  "Kadın Hastalıkları ve Doğum": 15,
+  "Küçük Stajlar": 30,
+  "Anatomi": 14,
+  "Histoloji ve Embriyoloji": 9,
+  "Fizyoloji": 16,
+  "Biyokimya": 22,
+  "Mikrobiyoloji": 22,
+  "Patoloji": 22,
+  "Farmakoloji": 22,
 };
