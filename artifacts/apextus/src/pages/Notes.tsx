@@ -374,6 +374,7 @@ const PROFESSIONAL_NOTE_STANDARD = `PROFESYONEL NOT STANDARDI:
 - Temel bilim konularinda: embriyolojik koken, histolojik ozellik, biyokimyasal yolak, reseptor/enzim, farmakolojik hedef ve patoloji baglantisini kur.
 - Klinik bilim konularinda: tani algoritmasi, ayirici tani, ilk islem, en iyi test, kesin tani, tedavi basamaklari, kontrendikasyon ve komplikasyonlari belirt.
 - Her notta en az 8 TUS spotu, 1 klinik vaka ornegi, 1 ayirici tani tablosu, 1 tani/tedavi algoritmasi ve 1 yanlis tuzagi bolumu olsun.
+- Karar agaclari metin cizimi degil, ogrencinin takip edebilecegi iki kollu secim diyagrami gibi tasarlansin.
 - Sayisal esikler, skorlar, dozlar, laboratuvar referanslari ve klasik bulgular atlanmasin.
 - Gereksiz genel kultur anlatimi yapma; sinavda puan getirecek bilgiye yogunlas.`;
 function buildNotePrompt(cat: string, topic: string): string {
@@ -399,12 +400,12 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - <div class="tip"><strong>TUS SPOT:</strong> ...</div>
 - <div class="warn"><strong>DİKKAT:</strong> ...</div>
 - <div class="algo"><strong>ALGORİTMA:</strong> Adım 1 → Adım 2 → Adım 3 (tanı/tedavi akış diyagramı)</div>
-- <div class="flowchart"><strong>KARAR AĞACI:</strong><br/>⬤ Başlangıç koşulu<br/>├─ [EVET] → sonuç<br/>└─ [HAYIR] → alternatif</div>
+- Karar agaci icin <pre>, <code>, ASCII cizim, dal karakterleri veya tek parca metin agaci kullanma. Bunun yerine asagidaki TANI / KARAR ALGORITMASI edu-diagram sablonunu kullan.
 - <div class="mnem"><strong>🧠 MNEM:</strong> ...</div>
 - <div class="score-box"><div class="score-title">SKOR</div>...</div>
 
 GÖRSEL DİYAGRAM KURALI (ZORUNLU — EN ÖNEMLİ KURAL):
-Her konuda 3 adet DETAYLI, RENKLI HTML diyagramı üret. Dış görsel KULLANMA — saf HTML/CSS. Boş elemanlar: ed-arrow/ed-arrow-h/ed-lbl içi HEP BOŞ bırakılır.
+Her konuda 3 adet DETAYLI, RENKLI HTML diyagrami uret. Dis gorsel KULLANMA - saf HTML/CSS. Karar agaci mutlaka ed-split + ed-split-branch yapisiyla iki kola ayrilsin.
 
 CSS SINIFLARI:
 • ed-node ed-[renk] — kutucuk (içine ed-sub ekleyerek alt bilgi ekle)
@@ -514,7 +515,8 @@ TİP 4 — Tedavi Basamakları (başarısızlık koşullu):
 
 RENK KODLARI: ed-red=kritik/etken/acil | ed-orange=mekanizma/uyarı | ed-gold=tanı/bulgular | ed-teal=tedavi/çözüm/iyi | ed-blue=klinik/semptom | ed-purple=komplikasyon/acil | ed-green=iyi prognoz | ed-gray=nötr/başlangıç
 ZORUNLU KURALLAR:
-• ed-arrow / ed-arrow-h / ed-lbl: içleri BOŞ kalır (metin yazma)
+• ed-arrow / ed-arrow-h icleri BOS kalir (metin yazma); ed-lbl icine kisa kosul/etiket yaz.
+• Karar agaci icin <div class="flowchart">, <pre>, <code>, "├", "└", "|" karakterleri ve monospace metin agaci kullanma.
 • Her ed-node içine gerçek klinik değerler yaz (ilaç adı+doz, sayısal eşik, yüzde oran)
 • ed-sub kullanarak her kutucuğa alt bilgi ekle — soyut etiket YAZMA ("Mekanizma" değil "ACE inhibitörü → bradikinin↑")
 • Diyagram başlıkları konuya özel olsun ("PAT0FİZYOLOJİ — KALBİ YETMEZLİK" gibi)
@@ -542,7 +544,10 @@ function buildLinkPrompt(cat: string, topic: string): string {
   return `TUS akademisyeni olarak şu konu için KLİNİK BAĞLANTI NOTLARI hazırla.
 KONU: ${cat} — ${topic}
 
-${PROFESSIONAL_NOTE_STANDARD}
+KISA FORMAT KURALI:
+- Sadece klinik baglanti yaz; konu anlatimi, buyuk baslik, tablo veya karar agaci ekleme.
+- Her madde 1-2 cumle olsun; yazilar kompakt, okunur ve hedefe yonelik kalsin.
+- Buyuk harfle uzun cumle yazma; hastalik adini kisa tut, ayirt ettiren ipucunu net ver.
 
 GÖREV: Bu konuyla AYNI belirti, bulgu, mekanizma, yolak, ilaç hedefi veya patolojik süreci paylaşan diğer TUS konularını listele.
 

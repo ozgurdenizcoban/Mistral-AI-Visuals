@@ -250,6 +250,27 @@ body {
 .nb hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 
 .nb .tip { background: var(--td); border: 1px solid rgba(45,212,191,.18); border-left: 3px solid var(--teal); border-radius: 8px; padding: 11px 15px; margin: 8px 0; color: var(--teal); font-size: .8rem; }
+.nb .tip ul {
+  margin-top: 8px;
+  gap: 6px;
+}
+.nb .tip ul li {
+  align-items: flex-start;
+  background: rgba(10,17,32,.42);
+  color: var(--t2);
+  font-size: .78rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.62;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.nb .tip ul li strong {
+  color: var(--cream);
+  font-size: .78rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
 .nb .warn { background: var(--rd); border: 1px solid rgba(232,83,74,.18); border-left: 3px solid var(--ac); border-radius: 8px; padding: 11px 15px; margin: 8px 0; color: var(--ac); font-size: .8rem; }
 .nb .algo { background: rgba(96,165,250,.08); border: 1px solid rgba(96,165,250,.18); border-left: 3px solid var(--blue); border-radius: 8px; padding: 11px 15px; margin: 8px 0; color: var(--blue); font-size: .8rem; }
 .nb .mnem { background: rgba(167,139,250,.08); border: 1px solid rgba(167,139,250,.18); border-left: 3px solid var(--purple); border-radius: 8px; padding: 11px 15px; margin: 8px 0; color: var(--purple); font-size: .8rem; }
@@ -259,10 +280,20 @@ body {
   background: rgba(167,139,250,.06); border: 1px solid rgba(167,139,250,.2);
   border-left: 3px solid var(--purple); border-radius: 8px;
   padding: 13px 16px; margin: 10px 0; color: var(--t2); font-size: .8rem;
-  font-family: "JetBrains Mono", monospace; line-height: 2; white-space: pre-wrap;
+  font-family: "Syne", sans-serif; line-height: 1.7; white-space: normal;
   word-break: break-word;
 }
 .nb .flowchart strong { color: var(--purple); font-family: "Syne", sans-serif; font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; display: block; margin-bottom: 6px; }
+.nb pre,
+.nb code {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: "Syne", sans-serif;
+  font-size: .78rem;
+  line-height: 1.65;
+  color: var(--t2);
+}
 
 /* ===== NOTE IMAGES — clinical figure style ===== */
 .note-images-grid {
@@ -458,12 +489,19 @@ body {
 .link-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 15px;
   border-bottom: 1px solid rgba(255,255,255,.04); cursor: pointer; transition: background .12s;
+  font-size: .78rem;
+  line-height: 1.45;
 }
 .link-item:last-child { border-bottom: none; }
 .link-item:hover { background: rgba(167,139,250,.08); }
 .link-item-cat {
   font-size: .58rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
   color: var(--purple); background: rgba(167,139,250,.1); padding: 2px 7px; border-radius: 10px;
+}
+.link-item strong {
+  font-size: .79rem !important;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .link-item-txt { font-size: .75rem; color: var(--t2); margin-top: 2px; line-height: 1.5; }
 
