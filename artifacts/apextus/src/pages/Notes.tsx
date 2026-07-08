@@ -10,6 +10,17 @@ import { toast } from "sonner";
 
 const noteCache: Record<string, string> = {};
 
+function shouldAlwaysShowReferenceImages(cat: string) {
+  return [
+    "Anatomi",
+    "Histoloji ve Embriyoloji",
+    "Fizyoloji",
+    "Patoloji",
+    "Mikrobiyoloji",
+    "Küçük Stajlar",
+  ].includes(cat);
+}
+
 export default function Notes() {
   const { state, saveState, noteTarget, setNoteTarget, setCurrentPage, setQuizTarget } = useApp();
   const [selectedCat, setSelectedCat] = useState<string | null>(noteTarget?.cat ?? null);
@@ -23,13 +34,14 @@ export default function Notes() {
 
   useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
 
-  // Inject supplementary Wikipedia images (only for old notes without HTML diagrams).
+  // Inject supplementary Wikipedia images. Anatomy-like subjects still need real reference visuals.
   useEffect(() => {
     if (!noteRef.current || !noteHtml || !activeTopic) return;
     const root = noteRef.current;
 
-    // New notes have inline edu-diagram elements — no external images needed
-    if (root.querySelectorAll(".edu-diagram").length > 0) return;
+    const hasHtmlDiagrams = root.querySelectorAll(".edu-diagram").length > 0;
+    const needsReferenceImages = shouldAlwaysShowReferenceImages(activeTopic.cat);
+    if (hasHtmlDiagrams && !needsReferenceImages) return;
 
     // Collect explicit placeholders added by the Mistral prompt (new notes)
     let placeholders = Array.from(root.querySelectorAll<HTMLElement>(".nb-img[data-q]"));

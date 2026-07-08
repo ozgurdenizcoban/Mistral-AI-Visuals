@@ -192,6 +192,17 @@ const TOPIC_MAP: Record<string, TopicMedia> = {
 
 /* ── Category fallback when topic not mapped ─────────────────── */
 const CAT_FALLBACK: Record<string, TopicMedia> = {
+  "Anatomi":             { articles: ["Human body", "Anatomy"], query: "human anatomy labeled diagram" },
+  "Histoloji ve Embriyoloji": { articles: ["Histology", "Embryology"], query: "histology embryology microscope labeled" },
+  "Fizyoloji":           { articles: ["Human physiology", "Homeostasis"], query: "human physiology mechanism diagram" },
+  "Biyokimya":           { articles: ["Biochemistry", "Metabolism"], query: "biochemistry metabolic pathway diagram" },
+  "Mikrobiyoloji":       { articles: ["Microbiology", "Bacteria"], query: "microbiology bacteria virus diagram" },
+  "Patoloji":            { articles: ["Pathology", "Inflammation"], query: "pathology histopathology specimen" },
+  "Farmakoloji":         { articles: ["Pharmacology", "Receptor (biochemistry)"], query: "pharmacology receptor mechanism diagram" },
+  "Pediatri":            { articles: ["Pediatrics"], query: "pediatrics child development medicine" },
+  "Genel Cerrahi":       { articles: ["Surgery", "Appendicitis"], query: "surgery anatomy operative diagram" },
+  "Kadın Hastalıkları ve Doğum": { articles: ["Obstetrics", "Gynaecology"], query: "obstetrics gynecology anatomy diagram" },
+  "Küçük Stajlar":       { articles: ["Neurology", "Dermatology"], query: "clinical medicine dermatology neurology diagram" },
   "Kardiyoloji":         { articles: ["Heart"], query: "cardiology heart anatomy" },
   "Göğüs Hastalıkları": { articles: ["Lung"], query: "lung pulmonology anatomy" },
   "Hematoloji":          { articles: ["Haematopoiesis"], query: "hematology blood cells bone marrow" },

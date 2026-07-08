@@ -163,13 +163,13 @@ body {
 
 /* ===== HERO ===== */
 .hero {
-  background: linear-gradient(135deg,rgba(232,83,74,.07),rgba(45,212,191,.03));
-  border: 1px solid rgba(232,83,74,.13); border-radius: 14px;
+  background: linear-gradient(135deg,rgba(45,212,191,.1),rgba(96,165,250,.06));
+  border: 1px solid rgba(45,212,191,.18); border-radius: 8px;
   padding: 26px 30px; margin-bottom: 18px; position: relative; overflow: hidden;
 }
 .hero::before {
   content: ''; position: absolute; top: -45px; right: -45px; width: 160px; height: 160px;
-  background: radial-gradient(circle,rgba(232,83,74,.1),transparent 70%); pointer-events: none;
+  background: radial-gradient(circle,rgba(96,165,250,.16),transparent 70%); pointer-events: none;
 }
 
 /* ===== LOADING ===== */
@@ -305,8 +305,8 @@ body {
 }
 .note-image-figure {
   display: flex; flex-direction: column; gap: 0;
-  border: 1px solid var(--line2); border-radius: 12px; overflow: hidden;
-  background: var(--ink3); box-shadow: 0 4px 18px rgba(0,0,0,.28);
+  border: 1px solid rgba(148,163,184,.26); border-radius: 8px; overflow: hidden;
+  background: #0f172a; box-shadow: 0 10px 28px rgba(0,0,0,.28);
 }
 .note-image {
   width: 100%; border-radius: 0;
@@ -314,7 +314,7 @@ body {
   display: block;
 }
 .note-image-caption {
-  font-size: .69rem; color: var(--t2);
+  font-size: .69rem; color: #cbd5e1;
   padding: 8px 13px; line-height: 1.5;
   font-family: "Syne", sans-serif;
   border-top: 1px solid var(--line);
@@ -338,9 +338,9 @@ body {
 }
 .inline-note-img {
   display: flex; flex-direction: column;
-  border: 1px solid var(--line2); border-radius: 12px; overflow: hidden;
-  background: var(--ink3); box-shadow: 0 4px 22px rgba(0,0,0,.32);
-  max-width: 520px; margin: 0 auto;
+  border: 1px solid rgba(148,163,184,.28); border-radius: 8px; overflow: hidden;
+  background: #0f172a; box-shadow: 0 12px 32px rgba(0,0,0,.3);
+  max-width: 620px; margin: 0 auto;
 }
 .inline-note-img img {
   width: 100%; display: block;
@@ -348,7 +348,7 @@ body {
   background: var(--ink2);
 }
 .inline-note-img figcaption {
-  font-size: .68rem; color: var(--t2);
+  font-size: .69rem; color: #cbd5e1;
   padding: 9px 14px; line-height: 1.55;
   font-family: "Syne", sans-serif;
   border-top: 1px solid var(--line);
@@ -826,9 +826,9 @@ body {
 
 /* ===== EDUCATIONAL HTML DIAGRAM (note inline) ===== */
 .edu-diagram {
-  background: var(--ink2);
-  border: 1.5px solid var(--line);
-  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(17,24,39,.98), rgba(11,18,32,.98));
+  border: 1px solid rgba(148,163,184,.22);
+  border-radius: 8px;
   padding: 18px 22px 20px;
   margin: 22px 0;
   font-family: "Syne", sans-serif;
@@ -837,7 +837,7 @@ body {
 .edu-diagram .ed-title {
   font-size: .82rem;
   font-weight: 800;
-  color: var(--cream);
+  color: #f8fafc;
   text-align: center;
   margin-bottom: 14px;
   text-transform: uppercase;
@@ -859,8 +859,8 @@ body {
   width: 100%;
 }
 .edu-diagram .ed-node {
-  padding: 9px 18px;
-  border-radius: 10px;
+  padding: 10px 18px;
+  border-radius: 8px;
   font-size: .79rem;
   font-weight: 700;
   color: #fff;
@@ -868,7 +868,8 @@ body {
   min-width: 100px;
   max-width: 210px;
   line-height: 1.45;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,.18);
 }
 /* Vertical down-arrow (CSS line + triangle) */
 .edu-diagram .ed-arrow {
@@ -932,15 +933,15 @@ body {
   margin-top: 2px;
 }
 /* Node colour variants */
-.edu-diagram .ed-red    { background: #c0392b; color: #fff; }
-.edu-diagram .ed-orange { background: #d35400; color: #fff; }
-.edu-diagram .ed-gold   { background: #d97706; color: #fff; }
-.edu-diagram .ed-teal   { background: #0d9488; color: #fff; }
-.edu-diagram .ed-blue   { background: #1d4ed8; color: #fff; }
+.edu-diagram .ed-red    { background: #b91c1c; color: #fff; }
+.edu-diagram .ed-orange { background: #c2410c; color: #fff; }
+.edu-diagram .ed-gold   { background: #fbbf24; color: #111827; }
+.edu-diagram .ed-teal   { background: #0f766e; color: #fff; }
+.edu-diagram .ed-blue   { background: #2563eb; color: #fff; }
 .edu-diagram .ed-purple { background: #7c3aed; color: #fff; }
 .edu-diagram .ed-green  { background: #047857; color: #fff; }
-.edu-diagram .ed-gray   { background: rgba(255,255,255,.12); color: var(--text); border: 1px solid var(--line); }
-.edu-diagram .ed-dark   { background: var(--ink3); color: var(--text); border: 1px solid var(--line2); }
+.edu-diagram .ed-gray   { background: #e2e8f0; color: #0f172a; border: 1px solid rgba(15,23,42,.15); }
+.edu-diagram .ed-dark   { background: #334155; color: #f8fafc; border: 1px solid rgba(255,255,255,.18); }
 /* Wide node — spans full available width */
 .edu-diagram .ed-wide {
   max-width: 100% !important;
@@ -948,22 +949,23 @@ body {
 }
 /* Sub-text line inside a node (dosage, detail, percentage) */
 .edu-diagram .ed-sub {
-  font-size: .64rem;
-  font-weight: 400;
-  color: rgba(255,255,255,.82);
+  font-size: .65rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.92);
   margin-top: 3px;
   line-height: 1.4;
 }
+.edu-diagram .ed-gold .ed-sub,
 .edu-diagram .ed-gray .ed-sub {
-  color: var(--t2);
+  color: rgba(15,23,42,.8);
 }
 /* Arrow label — placed between two .ed-arrow divs to annotate the transition */
 .edu-diagram .ed-lbl {
   font-size: .62rem;
   font-weight: 700;
-  color: var(--teal);
-  background: rgba(45,212,191,.1);
-  border: 1px solid rgba(45,212,191,.22);
+  color: #0f172a;
+  background: #99f6e4;
+  border: 1px solid rgba(15,118,110,.35);
   padding: 1px 9px;
   border-radius: 20px;
   text-align: center;
