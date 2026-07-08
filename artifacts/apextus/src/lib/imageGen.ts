@@ -239,6 +239,10 @@ export async function getQuizImage(tags: string[]): Promise<NoteImage | null> {
   return null;
 }
 
+export function buildQuizImageHtml(image: NoteImage): string {
+  return `<img src="${image.url}" alt="${image.caption}" loading="lazy" />`;
+}
+
 /** Build img-grid HTML for embedding in note innerHTML */
 export function buildImageHtml(images: NoteImage[]): string {
   if (!images.length) return "";

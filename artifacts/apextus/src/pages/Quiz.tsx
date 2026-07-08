@@ -3,6 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
+import { buildQuizImageHtml, getQuizImage } from "@/lib/imageGen";
 import { getSourceGuide } from "@/lib/sourceGuides";
 import { qFingerprint, toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
@@ -14,9 +15,16 @@ interface Q extends QuizQuestion {
 function cleanVisualHtml(raw?: string) {
   if (!raw) return "";
   const s = raw.trim();
-  if (/script|iframe|object|embed|base64|https?:\/\//i.test(s)) return "";
-  if (!/(<svg[\s>]|quiz-ai-diagram)/i.test(s)) return "";
+  if (/script|iframe|object|embed|base64/i.test(s)) return "";
+  const hasSafeWikiImg = /<img\s[^>]*src=["']https:\/\/upload\.wikimedia\.org\/[^"']+["'][^>]*>/i.test(s);
+  if (/https?:\/\//i.test(s) && !hasSafeWikiImg) return "";
+  if (!/(<svg[\s>]|quiz-ai-diagram|<img\s)/i.test(s)) return "";
   return s.slice(0, 5000);
+}
+
+function shouldUseSourceImage(q: Q) {
+  const text = `${q.tags?.join(" ") || ""} ${q.vaka || ""} ${q.soru || ""}`.toLocaleLowerCase("tr-TR");
+  return /(anatomi|histoloji|embriyoloji|ekg|grafi|radyoloji|deri|lezyon|döküntü|hücre|kas|sinir|kalp|akciğer|böbrek|serebellum|damar|organ|görüntü|şekil)/i.test(text);
 }
 
 export default function Quiz() {
@@ -118,15 +126,16 @@ KONULAR: ${topics.join(", ")}
 ${sourceGuide}
 KALITE KURALLARI:
 - Sorular ezber degil klinik akil yurutme gerektirsin.
-- Her vakada yas, cinsiyet, basvuru, fizik muayene ve en az 2 laboratuvar/goruntuleme ipucu olsun.
+- Klinik derslerde yaş, cinsiyet, başvuru, fizik muayene ve en az 2 laboratuvar/görüntüleme ipucu olan vaka kullan.
+- Temel bilimlerde soru kökü mekanizma, deney, hücre/doku bulgusu, reseptör-yolak, enzim veya patoloji preparatı mantığıyla kurulabilir; gereksiz klinik hikaye ekleme.
 - Secenekler birbirine yakin ama tek dogru olacak sekilde ayirici tani mantigiyla yazilsin.
 - TUS tuzaklari, esik degerleri, klasik bulgular ve tedavi algoritmalari kullanilsin.
 - Aciklama dogru cevabi ve en az 2 yanlis secenegin neden elendigini anlatsin.
-- Sorularin yaklasik %35'inde dis kaynak kullanmadan basit bir AI cizimi/sematik gorsel ver. visualHtml alanina yalnizca guvenli inline <svg> veya <div class="quiz-ai-diagram"> HTML'i koy. Fotograf, URL, base64 veya dis gorsel kullanma. Gorsel yoksa visualHtml bos string olsun.
+- Sadece gorsel gercekten klinik akil yurutmeyi guclendiriyorsa visualHtml ekle. AI cizimi gerekiyorsa guvenli inline <svg> veya <div class="quiz-ai-diagram"> kullan; gereksizse visualHtml bos string olsun. Sistem uygun konularda ayrica Wikipedia/Wikimedia gorseli ekleyebilir.
 ZORLUK: ${diff}
 SORU TİPLERİ: ${tiplar.join(", ")}
 
-Her soru için TUS tarzında gerçekçi klinik vaka yaz. 5 şık, 1 doğru cevap. Türkçe yaz.
+Her soru TUS tarzında olsun. Klinik derslerde gerçekçi vaka, temel bilimlerde mekanizma/preparat/laboratuvar odaklı kaliteli soru yaz. 5 şık, 1 doğru cevap. Türkçe yaz.
 
 JSON formatı (başka hiçbir şey yazma):
 {
@@ -167,6 +176,18 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
         .slice(0, count);
 
       if (!qs.length) throw new Error("Sorular üretilemedi");
+
+      let sourceImagesAdded = 0;
+      const sourceImageLimit = Math.max(1, Math.floor(count / 8));
+      for (const question of qs) {
+        if (sourceImagesAdded >= sourceImageLimit) break;
+        if (question.visualHtml || !shouldUseSourceImage(question)) continue;
+        const image = await getQuizImage(question.tags || []);
+        if (!image) continue;
+        question.visualHtml = cleanVisualHtml(buildQuizImageHtml(image));
+        question.visualCaption = `${image.caption} - Wikipedia / Wikimedia Commons`;
+        sourceImagesAdded += 1;
+      }
 
       setQuestions(qs);
       // Save and immediately mark as seen so they never repeat
@@ -284,8 +305,8 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
     return (
       <div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>Klinik Quiz</div>
-          <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>TUS tarzı klinik vaka soruları — performansına göre kişiselleştirilmiş</div>
+          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>TUS Quiz</div>
+          <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>Temel ve klinik bilimlerde TUS tarzı sorular — performansına göre kişiselleştirilmiş</div>
         </div>
 
         <div className="card">
@@ -347,7 +368,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
       <div className="loading-screen">
         <div className="loading-orb">✦</div>
         <div className="loading-title">Sorular hazırlanıyor</div>
-        <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>Klinik vakalar oluşturuluyor<span className="loading-dots" /></div>
+        <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>TUS soruları hazırlanıyor<span className="loading-dots" /></div>
       </div>
     );
   }
@@ -423,7 +444,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
       {/* Question card */}
       <div className="vc">
         <div className="vhdr">
-          <span className="vlbl">Klinik Vaka — TUS Formatı</span>
+          <span className="vlbl">TUS Sorusu</span>
         </div>
 
         <div className="vbody">

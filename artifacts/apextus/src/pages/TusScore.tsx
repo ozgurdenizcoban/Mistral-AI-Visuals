@@ -79,7 +79,7 @@ function pctColor(pct: number) {
 }
 
 function interpretation(puan: number) {
-  if (puan >= 65) return { text: "Mükemmel — Dahiliye, Kardiyoloji dahil tüm dallar açık", color: "var(--green)", icon: "🏆" };
+  if (puan >= 65) return { text: "Mükemmel — temel ve klinik derslerde güçlü rekabet bandı", color: "var(--green)", icon: "🏆" };
   if (puan >= 60) return { text: "Çok İyi — Popüler uzmanlık dalları için rekabetçi", color: "var(--teal)", icon: "🎯" };
   if (puan >= 55) return { text: "İyi — Orta popülerteki dallar için yeterli", color: "var(--blue)", icon: "👍" };
   if (puan >= 48) return { text: "Orta — Daha az tercih edilen dallara girebilir", color: "var(--gold)", icon: "📚" };
@@ -103,7 +103,7 @@ function Slider({ label, value, onChange }: { label: string; value: number; onCh
 export default function TusScore() {
   const { state } = useApp();
 
-  const [dahiliyeOverride, setDahiliyeOverride] = useState<Record<string, number>>({});
+  const [klinikOverride, setKlinikOverride] = useState<Record<string, number>>({});
   const [otherKlinik, setOtherKlinik] = useState<Record<string, number>>(
     Object.fromEntries(OTHER_KLINIK.map((s) => [s.label, 60]))
   );
@@ -111,7 +111,7 @@ export default function TusScore() {
     Object.fromEntries(TEMEL_SECTIONS.map((s) => [s.label, 60]))
   );
 
-  /* ---- dahiliye pct from byCat ---- */
+  /* ---- klinik system pct from byCat ---- */
   const dahiliyeStats = useMemo(() => {
     const result: Record<string, { pct: number; hasData: boolean }> = {};
     for (const cat of Object.keys(DAHILIYE_DIST)) {
@@ -119,16 +119,16 @@ export default function TusScore() {
       if (bc && bc.a > 0) {
         result[cat] = { pct: Math.round((bc.c / bc.a) * 100), hasData: true };
       } else {
-        result[cat] = { pct: dahiliyeOverride[cat] ?? 60, hasData: false };
+        result[cat] = { pct: klinikOverride[cat] ?? 60, hasData: false };
       }
     }
     return result;
-  }, [state.byCat, dahiliyeOverride]);
+  }, [state.byCat, klinikOverride]);
 
   function getEffectivePct(cat: string) {
     const stat = dahiliyeStats[cat];
-    if (stat.hasData && dahiliyeOverride[cat] === undefined) return stat.pct;
-    return dahiliyeOverride[cat] ?? stat.pct;
+    if (stat.hasData && klinikOverride[cat] === undefined) return stat.pct;
+    return klinikOverride[cat] ?? stat.pct;
   }
 
   /* ---- nets ---- */
@@ -139,7 +139,7 @@ export default function TusScore() {
       net += netScore(q * pct, q * (1 - pct));
     }
     return Math.round(net * 10) / 10;
-  }, [dahiliyeOverride, dahiliyeStats]);
+  }, [klinikOverride, dahiliyeStats]);
 
   const otherKlinikNet = useMemo(() => {
     let net = 0;
@@ -177,7 +177,7 @@ export default function TusScore() {
         TUS Puan Simülatörü
       </div>
       <div style={{ color: "var(--t2)", fontSize: ".82rem", marginBottom: 28, lineHeight: 1.6 }}>
-        Platform verilerinizden otomatik doldurulan dahiliye kategorileri ile Temel Bilimler ve diğer klinik bölümleri
+        Platform verilerinizden otomatik doldurulan klinik sistemler ile Temel Bilimler ve diğer klinik bölümleri
         kaydırıcıyla ayarlayın — ÖSYM benzeri standart puan formülüyle tahmini TUS puanınızı görün.
       </div>
 
@@ -268,7 +268,7 @@ export default function TusScore() {
           </div>
           {[
             { label: "Radyoloji / Anestezi", min: 65, color: "var(--green)" },
-            { label: "Kardiyoloji / Dahiliye", min: 62, color: "var(--teal)" },
+            { label: "Kardiyoloji / İç Hastalıkları", min: 62, color: "var(--teal)" },
             { label: "Genel Cerrahi / Pediatri", min: 58, color: "var(--blue)" },
             { label: "Aile Hekimliği / Halk S.", min: 52, color: "var(--gold)" },
             { label: "Ortalama yerleşme", min: 48, color: "var(--purple)" },
@@ -289,10 +289,10 @@ export default function TusScore() {
         </div>
       </div>
 
-      {/* Dahiliye detail table */}
+      {/* Klinik system detail table */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ fontSize: ".85rem", fontWeight: 700, color: "var(--cream)" }}>Dahiliye Kategori Detayı</div>
+          <div style={{ fontSize: ".85rem", fontWeight: 700, color: "var(--cream)" }}>Klinik Sistem Detayı</div>
           <span style={{ fontSize: ".67rem", color: "var(--t3)", fontFamily: "Syne, sans-serif" }}>
             🟢 = Platform verisinden · kaydırıcı ile düzenle
           </span>
@@ -322,7 +322,7 @@ export default function TusScore() {
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span>{icon}</span>
                       <span style={{ fontWeight: 600 }}>{cat}</span>
-                      {stat.hasData && dahiliyeOverride[cat] === undefined && (
+                      {stat.hasData && klinikOverride[cat] === undefined && (
                         <span style={{ fontSize: ".6rem", color: "var(--green)", fontWeight: 800 }}>🟢</span>
                       )}
                     </div>
@@ -332,7 +332,7 @@ export default function TusScore() {
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <input
                         type="range" min={0} max={100} step={5} value={eff}
-                        onChange={(e) => setDahiliyeOverride((prev) => ({ ...prev, [cat]: Number(e.target.value) }))}
+                        onChange={(e) => setKlinikOverride((prev) => ({ ...prev, [cat]: Number(e.target.value) }))}
                         style={{ flex: 1, accentColor: "var(--teal)", cursor: "pointer" }}
                       />
                       <span style={{ fontSize: ".75rem", fontWeight: 800, color: col2, minWidth: 32, textAlign: "right" }}>%{eff}</span>
@@ -345,13 +345,13 @@ export default function TusScore() {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={3} style={{ textAlign: "right", fontWeight: 700, color: "var(--cream)" }}>Dahiliye Net Toplam</td>
+              <td colSpan={3} style={{ textAlign: "right", fontWeight: 700, color: "var(--cream)" }}>Klinik Sistem Net Toplam</td>
               <td style={{ textAlign: "center", fontWeight: 900, color: "var(--teal)", fontSize: ".9rem" }}>{Math.max(0, dahiliyeNet)}</td>
             </tr>
           </tfoot>
         </table>
-        {Object.keys(dahiliyeOverride).length > 0 && (
-          <button className="btn btn-ghost sm" style={{ marginTop: 10, fontSize: ".72rem" }} onClick={() => setDahiliyeOverride({})}>
+        {Object.keys(klinikOverride).length > 0 && (
+          <button className="btn btn-ghost sm" style={{ marginTop: 10, fontSize: ".72rem" }} onClick={() => setKlinikOverride({})}>
             ↺ Platform Verilerine Dön
           </button>
         )}

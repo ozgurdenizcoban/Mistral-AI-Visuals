@@ -5,7 +5,7 @@ import { TREE } from "@/lib/data";
 
 const NAV_ITEMS = [
   { id: "dashboard", icon: "⊞", label: "Ana Sayfa" },
-  { id: "quiz", icon: "📋", label: "Klinik Quiz" },
+  { id: "quiz", icon: "📋", label: "TUS Quiz" },
   { id: "mockexam", icon: "🎯", label: "Deneme Sınavı" },
   { id: "tusscore", icon: "📈", label: "TUS Simülatörü" },
   { id: "fulltus", icon: "🎓", label: "Gerçek TUS Denemesi" },

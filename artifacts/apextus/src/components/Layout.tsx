@@ -85,7 +85,7 @@ export default function Layout() {
           <div style={{ width: 38 }} />
         </div>
 
-        <main style={{ flex: 1, padding: "22px 20px", maxWidth: 980, width: "100%", margin: "0 auto" }}>
+        <main style={{ flex: 1, padding: "24px 22px 34px", maxWidth: 1180, width: "100%", margin: "0 auto" }}>
           {pages[currentPage] ?? <Dashboard />}
         </main>
       </div>

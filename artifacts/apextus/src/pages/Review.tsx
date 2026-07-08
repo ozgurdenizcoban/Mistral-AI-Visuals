@@ -5,7 +5,7 @@ import { mistralText } from "@/lib/mistral";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 import type { SREntry } from "@/contexts/AppContext";
-import { getScoreSimulation, getTopicInsights } from "@/lib/studyInsights";
+import { getFocusedReviewPlan, getScoreSimulation, getTopicInsights } from "@/lib/studyInsights";
 
 export default function Review() {
   const { state, saveState, setNoteTarget, setCurrentPage } = useApp();
@@ -28,7 +28,9 @@ export default function Review() {
     }
   }));
 
-  const dueTodayList = allTopics.filter((t) => t.due);
+  const focusedReviewList = getFocusedReviewPlan(state, today, 14);
+  const dueTodayList = focusedReviewList.filter((t) => t.due || t.overdue).slice(0, 10);
+  const aiFocusList = focusedReviewList.slice(0, 8);
   const upcomingList = allTopics.filter((t) => !t.due && t.sr?.nextDate);
   const completedList = allTopics.filter((t) => t.sr?.studyCount && !t.sr?.nextDate);
   const previewDaysLeft = tusDate
@@ -68,13 +70,8 @@ export default function Review() {
     const sim = getScoreSimulation(state, daysLeft, hoursPerDay, targetScore);
 
     setPlanLoading(true);
-    const topicData: { konu: string; kategori: string; tekrar: number }[] = [];
-    TREE.forEach((b) => b.topics.forEach((t) => {
-      topicData.push({ konu: t, kategori: b.cat, tekrar: state.sr?.[t]?.studyCount || 0 });
-    }));
-
     const strategyLabel = { dengeli: "Dengeli", zayif: "Zayıf konulara ağırlık", guclu: "Güçlü konuları pekiştir" }[strategy];
-    const priorityList = topicData.sort((a, b) => a.tekrar - b.tekrar).slice(0, 30).map((t, i) => `${i + 1}. ${t.konu} (${t.kategori}) | geçmiş: ${t.tekrar}x`).join("\n");
+    const priorityList = focusedReviewList.map((t, i) => `${i + 1}. ${t.topic} (${t.cat}) | oncelik: ${t.priority} | durum: ${t.urgency} | tekrar: ${t.studyCount}x | hata: ${t.mistakes} | neden: ${t.reason}`).join("\n");
 
     const weakPriorityList = getTopicInsights(state)
       .slice(0, 35)
@@ -100,7 +97,7 @@ Gunluk soru hedefi: ${sim.dailyQuestionTarget}
 Gunluk tekrar hedefi: ${sim.dailyReviewTarget}
 Zayif konu sayisi: ${sim.weakTopicCount}
 
-=== ÖNCELİK SIRASI (En az çalışılmış) ===
+=== AI ÖNCELİK SIRASI (hata + gecikmiş tekrar + kapsam + ders performansı) ===
 ${priorityList}
 
 === PROFESYONEL RISK SIRASI (Hata + tekrar + kategori performansi) ===
@@ -155,18 +152,18 @@ EN SON:
             </div>
           </div>
           {dueTodayList.map((t) => (
-            <div key={t.name} className="sr-item">
+            <div key={t.topic} className="sr-item">
               <span style={{ fontSize: "1rem" }}>{t.icon}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: ".82rem", fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
-                <div style={{ fontSize: ".68rem", color: "var(--t2)" }}>{t.cat} · Seviye {t.sr?.level || 0} · {t.sr?.studyCount || 0}× çalışıldı</div>
+                <div style={{ fontSize: ".82rem", fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.topic}</div>
+                <div style={{ fontSize: ".68rem", color: "var(--t2)" }}>{t.cat} · {t.reason} · {t.studyCount || 0}× çalışıldı</div>
               </div>
               <span className={`sr-due${t.overdue ? " overdue" : " soon"}`}>
                 {t.overdue ? "Gecikmiş" : "Bugün"}
               </span>
               <div style={{ display: "flex", gap: 5 }}>
-                <button className="btn btn-teal sm" onClick={() => openNote(t.name)}>Oku</button>
-                <button className="btn btn-ghost sm" onClick={() => markStudied(t.name)}>✓</button>
+                <button className="btn btn-teal sm" onClick={() => openNote(t.topic)}>Oku</button>
+                <button className="btn btn-ghost sm" onClick={() => markStudied(t.topic)}>✓</button>
               </div>
             </div>
           ))}
@@ -179,6 +176,36 @@ EN SON:
           <div style={{ color: "var(--t2)", fontSize: ".8rem" }}>Tüm tekrarlarını tamamladın veya henüz çalışılmış konu yok.</div>
         </div>
       )}
+
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--teal)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+              AI Odak Listesi
+            </div>
+            <div style={{ color: "var(--t2)", fontSize: ".78rem", marginTop: 5 }}>
+              Tüm dersler içinden bugün en yüksek getirili konular. Liste kısa tutulur; kalabalık konu yığını göstermez.
+            </div>
+          </div>
+          <span className="tag tag-gold">{aiFocusList.length} öncelik</span>
+        </div>
+
+        {aiFocusList.map((t, i) => (
+          <div key={t.topic} className="sr-item priority">
+            <div className="weak-rank">{i + 1}</div>
+            <span style={{ fontSize: "1rem" }}>{t.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: ".82rem", fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.topic}</div>
+              <div style={{ fontSize: ".69rem", color: "var(--t2)", lineHeight: 1.45 }}>{t.cat} · {t.reason} · {t.action}</div>
+            </div>
+            <span className={`sr-due${t.overdue ? " overdue" : t.due ? " soon" : ""}`}>{t.urgency}</span>
+            <div style={{ display: "flex", gap: 5 }}>
+              <button className="btn btn-ghost sm" onClick={() => openNote(t.topic)}>Oku</button>
+              <button className="btn btn-teal sm" onClick={() => markStudied(t.topic)}>✓</button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* Upcoming */}
       {upcomingList.length > 0 && (

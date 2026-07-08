@@ -32,6 +32,13 @@ export interface ScoreSimulation {
   message: string;
 }
 
+export interface FocusedReviewTask extends TopicInsight {
+  due: boolean;
+  overdue: boolean;
+  nextDate?: string;
+  urgency: "bugün" | "gecikmiş" | "riskli" | "temel";
+}
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
@@ -71,6 +78,30 @@ export function getTopicInsights(state: AppState): TopicInsight[] {
       return { ...t, mistakes, studyCount, categoryPct, priority, reason, action };
     })
     .sort((a, b) => b.priority - a.priority);
+}
+
+export function getFocusedReviewPlan(state: AppState, today: string, limit = 12): FocusedReviewTask[] {
+  return getTopicInsights(state)
+    .map((insight) => {
+      const sr = state.sr?.[insight.topic];
+      const nextDate = sr?.nextDate;
+      const due = !!nextDate && nextDate <= today;
+      const overdue = !!nextDate && nextDate < today;
+      const dueBoost = overdue ? 45 : due ? 28 : 0;
+      const noDataBoost = insight.studyCount === 0 ? 10 : 0;
+      const priority = insight.priority + dueBoost + noDataBoost;
+      const urgency: FocusedReviewTask["urgency"] = overdue
+        ? "gecikmiş"
+        : due
+        ? "bugün"
+        : insight.mistakes > 0 || (insight.categoryPct !== null && insight.categoryPct < 65)
+        ? "riskli"
+        : "temel";
+
+      return { ...insight, priority, due, overdue, nextDate, urgency };
+    })
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, limit);
 }
 
 export function getScoreSimulation(

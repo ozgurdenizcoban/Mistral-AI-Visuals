@@ -61,10 +61,10 @@
 
   /* Custom palette */
   --ink: #0a0c10;
-  --ink2: #111520;
-  --ink3: #161c2a;
-  --line: #252f42;
-  --line2: #2d3a52;
+  --ink2: #101622;
+  --ink3: #182132;
+  --line: #2b374a;
+  --line2: #39485f;
   --cream: #f0ece3;
   --ac: #e8534a;
   --ac2: #c94840;
@@ -77,9 +77,9 @@
   --grd: rgba(52,211,153,.1);
   --blue: #60a5fa;
   --purple: #a78bfa;
-  --text: #e2ddd6;
-  --t2: #8a95a8;
-  --t3: #4a5568;
+  --text: #edf2f7;
+  --t2: #b8c2d6;
+  --t3: #7b879b;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -87,7 +87,9 @@
 html { font-size: 15px; }
 
 body {
-  background: var(--ink);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(45,212,191,.08), transparent 28rem),
+    linear-gradient(180deg, #0b1018 0%, #090c11 45%, #080a0e 100%);
   color: var(--text);
   font-family: "Syne", sans-serif;
   min-height: 100vh;
@@ -127,8 +129,9 @@ body {
 
 /* ===== CARDS ===== */
 .card {
-  background: var(--ink2); border: 1px solid var(--line);
-  border-radius: 14px; padding: 18px;
+  background: rgba(16,22,34,.92); border: 1px solid var(--line);
+  border-radius: 8px; padding: 18px;
+  box-shadow: 0 14px 40px rgba(0,0,0,.18);
 }
 
 /* ===== TAGS ===== */
@@ -145,7 +148,7 @@ body {
 
 /* ===== KPI ===== */
 .kpi {
-  background: var(--ink2); border: 1px solid var(--line); border-radius: 14px;
+  background: rgba(16,22,34,.92); border: 1px solid var(--line); border-radius: 8px;
   padding: 17px; position: relative; overflow: hidden; transition: transform .16s;
 }
 .kpi:hover { transform: translateY(-2px); }
@@ -231,21 +234,21 @@ body {
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.12} }
 
 /* ===== NOTE CONTENT ===== */
-.nb { font-size: .85rem; line-height: 1.86; color: var(--t2); overflow-x: auto; }
-.nb h2 { font-family: "Playfair Display", serif; font-size: 1.2rem; font-weight: 700; color: var(--cream); margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-.nb h3 { font-size: .76rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--teal); margin: 18px 0 8px; }
+.nb { font-size: .88rem; line-height: 1.82; color: #dbe4f2; overflow-x: auto; }
+.nb h2 { font-family: "Playfair Display", serif; font-size: 1.18rem; font-weight: 700; color: #fff7ed; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.nb h3 { font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #5eead4; margin: 18px 0 8px; }
 .nb h4 { font-size: .82rem; font-weight: 700; color: var(--cream); margin: 13px 0 6px; }
-.nb p { margin-bottom: 8px; line-height: 1.86; word-break: break-word; overflow-wrap: break-word; }
+.nb p { margin-bottom: 8px; line-height: 1.86; color: #dbe4f2; word-break: break-word; overflow-wrap: break-word; }
 .nb table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: .77rem; table-layout: auto; }
 .nb th { background: var(--ink3); padding: 7px 11px; text-align: left; color: var(--teal); font-weight: 700; border: 1px solid var(--line); }
-.nb td { padding: 6px 11px; border: 1px solid var(--line); color: var(--t2); line-height: 1.52; }
+.nb td { padding: 6px 11px; border: 1px solid var(--line); color: #dbe4f2; line-height: 1.52; }
 .nb tr:nth-child(even) td { background: rgba(255,255,255,.02); }
 .nb ul { list-style: none; display: flex; flex-direction: column; gap: 3px; margin: 6px 0 10px; }
-.nb ul li { padding: 5px 9px; background: var(--ink3); border-radius: 6px; display: flex; gap: 6px; line-height: 1.52; word-break: break-word; }
+.nb ul li { padding: 6px 10px; background: rgba(24,33,50,.72); border: 1px solid rgba(255,255,255,.04); border-radius: 6px; display: flex; gap: 6px; line-height: 1.58; color: #dbe4f2; word-break: break-word; }
 .nb ul li::before { content: "▸"; color: var(--teal); flex-shrink: 0; margin-top: 1px; }
 .nb ol { list-style-position: inside; padding-left: 12px; display: flex; flex-direction: column; gap: 4px; margin: 6px 0 10px; }
 .nb ol li { padding: 4px 6px; line-height: 1.52; }
-.nb strong { color: var(--cream); font-weight: 700; }
+.nb strong { color: #fff7ed; font-weight: 750; }
 .nb em { color: var(--gold); font-style: italic; }
 .nb hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 
@@ -391,6 +394,17 @@ body {
   align-items: center;
   justify-content: center;
   padding: 8px;
+}
+.quiz-ai-visual > div:has(img) {
+  min-height: 0;
+  padding: 0;
+  display: block;
+}
+.quiz-ai-visual > div img {
+  width: 100%;
+  display: block;
+  max-height: 180px;
+  object-fit: cover;
 }
 .quiz-ai-visual svg {
   width: 100%;
