@@ -19,8 +19,8 @@ export default function Layout() {
   if (loading) {
     return (
       <div className="loading-screen" style={{ height: "100vh" }}>
-        <div className="loading-orb">⚕</div>
-        <div className="loading-title">Apex — TUS Zirvesi</div>
+        <div className="loading-orb">A</div>
+        <div className="loading-title">ApexTUS</div>
         <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 6 }}>
           Yükleniyor<span className="loading-dots" />
         </div>
@@ -59,7 +59,7 @@ export default function Layout() {
       <div
         style={{
           flex: 1, display: "flex", flexDirection: "column",
-          minWidth: 0, paddingLeft: "clamp(0px,220px,220px)",
+          minWidth: 0, paddingLeft: 248,
         }}
         className="main-content-area"
       >
@@ -67,7 +67,7 @@ export default function Layout() {
         <div
           style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "11px 16px", background: "var(--ink2)", borderBottom: "1px solid var(--line)",
+            padding: "11px 16px", background: "rgba(7,17,31,.92)", borderBottom: "1px solid var(--line)",
             position: "sticky", top: 0, zIndex: 90,
           }}
           className="mobile-topbar"
@@ -79,13 +79,13 @@ export default function Layout() {
           >
             ☰
           </button>
-          <span style={{ fontFamily: "Playfair Display, serif", fontWeight: 900, color: "var(--ac)" }}>
-            Apex TUS
+          <span style={{ fontFamily: "Playfair Display, serif", fontWeight: 900, color: "var(--cream)" }}>
+            ApexTUS
           </span>
           <div style={{ width: 38 }} />
         </div>
 
-        <main style={{ flex: 1, padding: "24px 22px 34px", maxWidth: 1180, width: "100%", margin: "0 auto" }}>
+        <main style={{ flex: 1, padding: "24px 24px 40px", maxWidth: 1280, width: "100%", margin: "0 auto" }}>
           {pages[currentPage] ?? <Dashboard />}
         </main>
       </div>
@@ -93,7 +93,7 @@ export default function Layout() {
       <style>{`
         @media (min-width: 900px) {
           .mobile-topbar { display: none !important; }
-          .main-content-area { padding-left: 220px !important; }
+          .main-content-area { padding-left: 248px !important; }
         }
         @media (max-width: 899px) {
           .main-content-area { padding-left: 0 !important; }

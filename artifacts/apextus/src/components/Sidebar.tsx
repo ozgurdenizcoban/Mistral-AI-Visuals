@@ -1,18 +1,32 @@
 import { signOut } from "firebase/auth";
+import { BarChart3, BookOpen, CalendarCheck, ClipboardCheck, FileQuestion, Home, LineChart, LogOut, Settings, Target } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 import { TREE } from "@/lib/data";
 
-const NAV_ITEMS = [
-  { id: "dashboard", icon: "⊞", label: "Ana Sayfa" },
-  { id: "quiz", icon: "📋", label: "TUS Quiz" },
-  { id: "mockexam", icon: "🎯", label: "Deneme Sınavı" },
-  { id: "tusscore", icon: "📈", label: "TUS Simülatörü" },
-  { id: "fulltus", icon: "🎓", label: "Gerçek TUS Denemesi" },
-  { id: "notes", icon: "📚", label: "Konu Notları" },
-  { id: "review", icon: "⏰", label: "Tekrar Planı" },
-  { id: "stats", icon: "📊", label: "İstatistikler" },
-  { id: "account", icon: "⚙", label: "Hesap" },
+const NAV_GROUPS = [
+  {
+    title: "Çalışma",
+    items: [
+      { id: "dashboard", icon: Home, label: "Ana ekran" },
+      { id: "notes", icon: BookOpen, label: "Konu notları" },
+      { id: "quiz", icon: FileQuestion, label: "TUS quiz" },
+      { id: "review", icon: CalendarCheck, label: "Tekrar planı" },
+    ],
+  },
+  {
+    title: "Sınav",
+    items: [
+      { id: "fulltus", icon: ClipboardCheck, label: "Gerçek TUS" },
+      { id: "mockexam", icon: Target, label: "Mini deneme" },
+      { id: "tusscore", icon: LineChart, label: "Puan simülatörü" },
+      { id: "stats", icon: BarChart3, label: "İstatistikler" },
+    ],
+  },
+  {
+    title: "Hesap",
+    items: [{ id: "account", icon: Settings, label: "Ayarlar" }],
+  },
 ];
 
 interface SidebarProps {
@@ -29,163 +43,57 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   }
 
   const pct = state.total > 0 ? Math.round((state.correct / state.total) * 100) : 0;
+  const studiedCount = Object.values(state.sr || {}).filter((v) => (v.studyCount || 0) > 0).length;
+  const totalCount = TREE.reduce((acc, b) => acc + b.topics.length, 0);
+  const pctStudy = totalCount ? Math.round((studiedCount / totalCount) * 100) : 0;
 
   return (
-    <div
-      style={{
-        width: 220, background: "var(--ink2)", borderRight: "1px solid var(--line)",
-        height: "100vh", position: "fixed", left: 0, top: 0, zIndex: 110,
-        display: "flex", flexDirection: "column", overflowY: "auto",
-        transition: "transform .22s cubic-bezier(.4,0,.2,1)",
-        transform: isOpen ? "translateX(0)" : undefined,
-      }}
-      className="sidebar-el"
-    >
-      {/* Logo */}
-      <div
-        style={{
-          padding: "24px 18px 16px", borderBottom: "1px solid var(--line)",
-          cursor: "pointer",
-        }}
-        onClick={() => goTo("dashboard")}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              width: 34, height: 34, borderRadius: 9, background: "linear-gradient(135deg,var(--ac),var(--ac2))",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "1rem", fontWeight: 900, color: "#fff",
-            }}
-          >
-            ⚕
-          </div>
-          <div>
-            <div style={{ fontFamily: "Playfair Display, serif", fontWeight: 900, fontSize: ".96rem", color: "var(--cream)" }}>
-              Apex
-            </div>
-            <div style={{ fontSize: ".58rem", color: "var(--t2)", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase" }}>
-              TUS Zirvesi
-            </div>
-          </div>
+    <aside className="app-sidebar sidebar-el" style={{ transform: isOpen ? "translateX(0)" : undefined }}>
+      <button className="brand-block" onClick={() => goTo("dashboard")}>
+        <div className="brand-mark">A</div>
+        <div>
+          <strong>ApexTUS</strong>
+          <span>Akıllı TUS kampüsü</span>
         </div>
-      </div>
+      </button>
 
-      {/* User info */}
       {user && (
-        <div
-          style={{
-            padding: "13px 16px", borderBottom: "1px solid var(--line)",
-            display: "flex", alignItems: "center", gap: 10,
-          }}
-        >
-          <div
-            style={{
-              width: 32, height: 32, borderRadius: "50%",
-              background: "linear-gradient(135deg,var(--teal),var(--blue))",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: ".8rem", fontWeight: 800, color: "var(--ink)", flexShrink: 0,
-            }}
-          >
-            {(username?.[0] ?? "U").toUpperCase()}
-          </div>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div
-              style={{
-                fontSize: ".78rem", fontWeight: 700, color: "var(--text)",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}
-            >
-              {username || "Kullanıcı"}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              {state.streak > 0 && (
-                <span style={{ fontSize: ".6rem", color: "var(--gold)", fontWeight: 800 }}>
-                  🔥 {state.streak}g
-                </span>
-              )}
-            </div>
+        <div className="sidebar-user">
+          <div className="avatar">{(username?.[0] ?? "U").toUpperCase()}</div>
+          <div>
+            <strong>{username || "Hekim adayı"}</strong>
+            <span>{state.streak > 0 ? `${state.streak} günlük seri` : "Çalışmaya hazır"}</span>
           </div>
         </div>
       )}
 
-      {/* Nav items */}
-      <nav style={{ padding: "10px 8px", flex: 1 }}>
-        {NAV_ITEMS.map((item) => {
-          const active = currentPage === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => goTo(item.id)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 10px", borderRadius: 9, border: "none", cursor: "pointer",
-                background: active ? "rgba(232,83,74,.12)" : "transparent",
-                color: active ? "var(--ac)" : "var(--t2)",
-                fontFamily: "Syne, sans-serif", fontSize: ".82rem", fontWeight: active ? 700 : 500,
-                transition: "all .13s", marginBottom: 2,
-              }}
-              onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,.04)"; }}
-              onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
-            >
-              <span style={{ fontSize: ".92rem", width: 20, textAlign: "center", flexShrink: 0 }}>
-                {item.icon}
-              </span>
-              {item.label}
-            </button>
-          );
-        })}
+      <nav className="sidebar-nav">
+        {NAV_GROUPS.map((group) => (
+          <div className="nav-group" key={group.title}>
+            <div className="nav-title">{group.title}</div>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const active = currentPage === item.id;
+              return (
+                <button key={item.id} className={`nav-item${active ? " active" : ""}`} onClick={() => goTo(item.id)}>
+                  <Icon size={17} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
-      {/* Quick stats */}
-      <div
-        style={{
-          padding: "13px 14px", borderTop: "1px solid var(--line)",
-          display: "flex", flexDirection: "column", gap: 7,
-        }}
-      >
-        <div style={{ fontSize: ".65rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".07em" }}>
-          Hızlı Özet
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".76rem" }}>
-          <span style={{ color: "var(--t2)" }}>Toplam Soru</span>
-          <span style={{ color: "var(--cream)", fontWeight: 700 }}>{state.total}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".76rem" }}>
-          <span style={{ color: "var(--t2)" }}>Başarı</span>
-          <span style={{ color: pct >= 70 ? "var(--green)" : pct >= 40 ? "var(--teal)" : "var(--ac)", fontWeight: 700 }}>
-            {pct}%
-          </span>
-        </div>
-        {(() => {
-          const studiedCount = Object.values(state.sr || {}).filter(
-            (v) => (v.studyCount || 0) > 0
-          ).length;
-          const totalCount = TREE.reduce((acc, b) => acc + b.topics.length, 0);
-          const pctStudy = Math.round((studiedCount / totalCount) * 100);
-          return (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".76rem" }}>
-                <span style={{ color: "var(--t2)" }}>Konu Kapsamı</span>
-                <span style={{ color: "var(--teal)", fontWeight: 700 }}>{studiedCount}/{totalCount}</span>
-              </div>
-              <div className="progress-bar" style={{ marginTop: 3 }}>
-                <div className="progress-fill" style={{ width: `${pctStudy}%`, background: "var(--teal)" }} />
-              </div>
-            </>
-          );
-        })()}
+      <div className="sidebar-summary">
+        <div className="summary-line"><span>Doğruluk</span><strong>{pct}%</strong></div>
+        <div className="summary-line"><span>Kapsam</span><strong>{studiedCount}/{totalCount}</strong></div>
+        <div className="mini-bar"><i style={{ width: `${pctStudy}%` }} /></div>
       </div>
 
-      {/* Signout */}
-      <div style={{ padding: "0 8px 16px" }}>
-        <button
-          className="btn btn-ghost sm"
-          style={{ width: "100%", justifyContent: "center", fontSize: ".76rem" }}
-          onClick={() => signOut(auth)}
-        >
-          ↩ Çıkış Yap
-        </button>
-      </div>
+      <button className="signout-btn" onClick={() => signOut(auth)}>
+        <LogOut size={16} /> Çıkış yap
+      </button>
 
       <style>{`
         @media (min-width: 900px) {
@@ -196,6 +104,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           .sidebar-el[style*="translateX(0)"] { transform: translateX(0) !important; }
         }
       `}</style>
-    </div>
+    </aside>
   );
 }
