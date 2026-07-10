@@ -444,6 +444,27 @@ body {
 .score-slider { display: flex; align-items: center; gap: 8px; }
 .score-slider input { flex: 1; min-width: 120px; accent-color: var(--teal); }
 .score-slider span { min-width: 38px; text-align: right; font-weight: 900; font-size: .75rem; }
+.placement-search { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; margin-bottom: 12px; }
+.placement-search input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: .86rem;
+}
+.placement-search span { color: var(--t3); font-size: .72rem; font-weight: 800; }
+.program-card { align-items: stretch; }
+.program-card > div:first-child { min-width: 0; }
+.program-card strong { font-size: .78rem; }
+.program-card small { display: block; color: var(--t2); font-size: .66rem; line-height: 1.45; margin-top: 6px; }
+.program-card > div:last-child { min-width: 88px; text-align: right; }
+.placement-card.guclu { border-color: rgba(34,197,94,.38); background: rgba(34,197,94,.07); }
+.placement-card.sinirda { border-color: rgba(45,212,191,.38); background: rgba(45,212,191,.07); }
+.placement-card.yakin, .placement-card.bos { border-color: rgba(251,191,36,.38); background: rgba(251,191,36,.07); }
+.placement-card.uzak { border-color: rgba(148,163,184,.22); background: rgba(148,163,184,.04); }
 
 /* ===== SIMPLE REVIEW ===== */
 .review-simple { display: flex; flex-direction: column; gap: 16px; }
@@ -485,6 +506,7 @@ body {
 @media (max-width: 900px) {
   .score-hero, .review-grid { grid-template-columns: 1fr; }
   .score-metrics, .plan-controls-simple { grid-template-columns: 1fr; }
+  .placement-search { grid-template-columns: 1fr; }
   .review-hero { align-items: flex-start; flex-direction: column; }
 }
 @media (max-width: 620px) {

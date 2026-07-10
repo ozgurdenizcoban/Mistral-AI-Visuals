@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, parseJSON } from "@/lib/mistral";
 import { fbGetQuestions, fbSaveQuestions, QuizQuestion } from "@/lib/firestore";
-import { getPlacementMatches, TUS_SCORE_SOURCE } from "@/lib/tusData";
+import { searchTusPrograms, TUS_SCORE_SOURCE } from "@/lib/tusData";
 import { toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -105,6 +105,14 @@ function pctColor(p: number) {
   if (p >= 55) return "var(--teal)";
   if (p >= 40) return "var(--gold)";
   return "var(--ac)";
+}
+
+function placementStatusLabel(status: string) {
+  if (status === "guclu") return "Yerleşir gibi";
+  if (status === "sinirda") return "Sınırda";
+  if (status === "yakin") return "Yakın";
+  if (status === "bos") return "Boş kalmış";
+  return "Uzak";
 }
 
 /* Build per-subject question counts for a given scale */
@@ -212,6 +220,7 @@ export default function FullTUS() {
   const [answered, setAnswered] = useState(false);
   const [answers, setAnswers] = useState<{ q: Q; sel: number; correct: boolean }[]>([]);
   const [genProgress, setGenProgress] = useState({ done: 0, total: 0, cat: "", failed: 0 });
+  const [placementQuery, setPlacementQuery] = useState("");
 
   /* ---- generate ---- */
   async function startExam() {
@@ -563,7 +572,7 @@ export default function FullTUS() {
   if (phase === "result") {
     const overallPct = answers.length > 0 ? Math.round((totalCorrect / answers.length) * 100) : 0;
     const barPct = Math.max(0, Math.min(100, Math.round(((tusPuan - 40) / 40) * 100)));
-    const placementMatches = getPlacementMatches(tusPuan);
+    const placementMatches = searchTusPrograms(placementQuery, tusPuan, placementQuery.trim() ? 12 : 8);
 
     /* Per-category */
     const catMap: Record<string, { correct: number; total: number; group: "temel" | "klinik"; icon: string }> = {};
@@ -623,27 +632,39 @@ export default function FullTUS() {
         <div className="placement-panel" style={{ marginBottom: 20 }}>
           <div className="panel-head">
             <div>
-              <div className="eyebrow">Nereye yerleşebilirim?</div>
-              <h2>Deneme puanına göre branşlar</h2>
+              <div className="eyebrow">Nereye yerle?ebilirim?</div>
+              <h2>Kurum ve b?l?m kontrol?</h2>
             </div>
-            <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer" style={{ color: "var(--t3)", fontSize: ".7rem" }}>ÖSYM verisi</a>
+            <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer" style={{ color: "var(--t3)", fontSize: ".7rem" }}>?SYM verisi</a>
+          </div>
+          <div className="placement-search">
+            <input
+              value={placementQuery}
+              onChange={(e) => setPlacementQuery(e.target.value)}
+              placeholder="?rn: OM? plastik, Ankara g?z"
+            />
+            <span>{placementQuery.trim() ? "Arama sonucu" : "Deneme puan?na g?re en yak?n kurumlar"}</span>
           </div>
           <div className="placement-grid">
-            {placementMatches.slice(0, 12).map((item) => (
-              <div className={`placement-card ${item.status}`} key={item.branch}>
+            {placementMatches.map((item) => (
+              <div className={`placement-card program-card ${item.status}`} key={item.code}>
                 <div>
-                  <strong>{item.branch}</strong>
-                  <span>{item.competitiveness} rekabet</span>
+                  <strong>{item.institution}</strong>
+                  <span>{item.specialty}</span>
+                  <small>{item.message}</small>
                 </div>
                 <div>
-                  <b>{item.min.toFixed(1)}</b>
-                  <em>{item.status}</em>
+                  <b>{item.minScore === null ? "Bo?" : item.minScore.toFixed(2)}</b>
+                  <em>{placementStatusLabel(item.status)}</em>
+                  <small>{item.placed}/{item.quota} yerle?en</small>
                 </div>
               </div>
             ))}
           </div>
+          {placementQuery.trim() && placementMatches.length === 0 && (
+            <div className="near-note">Sonu? bulunamad?. Daha k?sa aramay? dene: ?plastik?, ?ankara g?z?, ?ondokuz may?s?.</div>
+          )}
         </div>
-
         {/* Genel ozet */}
         <div className="card" style={{ padding: 18, marginBottom: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-around", textAlign: "center" }}>

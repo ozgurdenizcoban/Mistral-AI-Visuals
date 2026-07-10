@@ -1,3 +1,5 @@
+import { TUS_PROGRAMS } from "./tusPrograms";
+
 export interface TusScoreSection {
   label: string;
   group: "Temel" | "Klinik";
@@ -10,6 +12,20 @@ export interface SpecialtyBenchmark {
   max?: number;
   competitiveness: "çok yüksek" | "yüksek" | "orta" | "erişilebilir";
 }
+
+export interface TusProgram {
+  code: string;
+  institution: string;
+  specialty: string;
+  city: string;
+  quota: number;
+  placed: number;
+  empty: number;
+  minScore: number | null;
+  maxScore: number | null;
+}
+
+export type PlacementStatus = "guclu" | "sinirda" | "yakin" | "uzak" | "bos";
 
 export const TUS_SCORE_SOURCE = {
   label: "ÖSYM 2025-TUS 2. Dönem en küçük/en büyük puanlar",
@@ -44,8 +60,7 @@ export const TUS_SECTIONS: TusScoreSection[] = [
   { label: "Göz Hastalıkları", group: "Klinik", q: 2 },
 ];
 
-// Branch-level approximation derived from the latest ÖSYM min/max placement tables.
-// The app uses branch bands, not institution-specific rows, so students see a realistic orientation.
+// Branch-level quick orientation; institution-level checks use TUS_PROGRAMS below.
 export const SPECIALTY_BENCHMARKS: SpecialtyBenchmark[] = [
   { branch: "Deri ve Zührevi Hastalıkları", min: 71.5, competitiveness: "çok yüksek" },
   { branch: "Plastik, Rekonstrüktif ve Estetik Cerrahi", min: 70.8, competitiveness: "çok yüksek" },
@@ -98,7 +113,82 @@ export function calcSpKlinik(net: number) {
 export function getPlacementMatches(score: number) {
   return SPECIALTY_BENCHMARKS.map((item) => {
     const diff = Math.round((score - item.min) * 10) / 10;
-    const status = diff >= 2 ? "güçlü" : diff >= 0 ? "sınırda" : diff >= -3 ? "yakın" : "uzak";
+    const status: PlacementStatus = diff >= 2 ? "guclu" : diff >= 0 ? "sinirda" : diff >= -3 ? "yakin" : "uzak";
     return { ...item, diff, status };
   }).sort((a, b) => b.min - a.min);
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ö/g, "o")
+    .replace(/ü/g, "u")
+    .replace(/ğ/g, "g")
+    .replace(/ş/g, "s")
+    .replace(/ı/g, "i")
+    .replace(/i̇/g, "i")
+    .replace(/ç/g, "c")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function expandQuery(query: string) {
+  return normalizeSearch(query)
+    .replace(/\bomu\b/g, "ondokuz mayis")
+    .replace(/\bomü\b/g, "ondokuz mayis")
+    .replace(/\bsbu\b/g, "saglik bilimleri")
+    .replace(/\bhacettepe\b/g, "hacettepe universitesi")
+    .replace(/\bgazi\b/g, "gazi universitesi")
+    .replace(/\bgoz\b/g, "goz hastaliklari");
+}
+
+export function getProgramStatus(score: number, program: TusProgram): PlacementStatus {
+  if (program.minScore === null) return program.empty > 0 ? "bos" : "uzak";
+  const diff = score - program.minScore;
+  if (diff >= 1.5) return "guclu";
+  if (diff >= 0) return "sinirda";
+  if (diff >= -2.5) return "yakin";
+  return "uzak";
+}
+
+export function getProgramMessage(score: number, program: TusProgram) {
+  const status = getProgramStatus(score, program);
+  if (status === "bos") return "Son yerleştirmede boş kalmış; taban puan oluşmamış.";
+  if (program.minScore === null) return "Bu program için karşılaştırılabilir taban puan yok.";
+
+  const diff = Math.round((score - program.minScore) * 10) / 10;
+  if (status === "guclu") return `Geçen yerleştirmeye göre ${diff.toFixed(1)} puan üstündesin.`;
+  if (status === "sinirda") return `Taban puanın ${diff.toFixed(1)} puan üstünde; sınırda ama mümkün.`;
+  if (status === "yakin") return `${Math.abs(diff).toFixed(1)} puan eksik; yakın hedef.`;
+  return `${Math.abs(diff).toFixed(1)} puan eksik; şu an uzak hedef.`;
+}
+
+export function searchTusPrograms(query: string, score: number, limit = 12) {
+  const normalized = expandQuery(query);
+  const tokens = normalized.split(" ").filter(Boolean);
+  const programs = tokens.length > 0
+    ? TUS_PROGRAMS.filter((program) => {
+        const text = normalizeSearch(`${program.institution} ${program.specialty} ${program.city} ${program.code}`);
+        return tokens.every((token) => text.includes(token));
+      })
+    : TUS_PROGRAMS.filter((program) => program.minScore !== null && program.minScore <= score + 2.5);
+
+  return programs
+    .map((program) => ({
+      ...program,
+      status: getProgramStatus(score, program),
+      message: getProgramMessage(score, program),
+      diff: program.minScore === null ? null : Math.round((score - program.minScore) * 10) / 10,
+    }))
+    .sort((a, b) => {
+      const aScore = a.minScore ?? -1;
+      const bScore = b.minScore ?? -1;
+      if (query.trim()) {
+        const statusOrder: Record<PlacementStatus, number> = { guclu: 0, sinirda: 1, yakin: 2, bos: 3, uzak: 4 };
+        return statusOrder[a.status] - statusOrder[b.status] || bScore - aScore;
+      }
+      return bScore - aScore;
+    })
+    .slice(0, limit);
 }

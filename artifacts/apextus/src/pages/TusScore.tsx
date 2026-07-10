@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
-import { calcSpKlinik, calcSpTemel, calcTusPuan, getPlacementMatches, netScore, TUS_SCORE_SOURCE, TUS_SECTIONS } from "@/lib/tusData";
+import { calcSpKlinik, calcSpTemel, calcTusPuan, netScore, searchTusPrograms, TUS_SCORE_SOURCE, TUS_SECTIONS } from "@/lib/tusData";
 
 function pctColor(pct: number) {
   if (pct >= 75) return "var(--green)";
@@ -10,15 +10,24 @@ function pctColor(pct: number) {
 }
 
 function statusColor(status: string) {
-  if (status === "güçlü") return "var(--green)";
-  if (status === "sınırda") return "var(--teal)";
-  if (status === "yakın") return "var(--gold)";
+  if (status === "guclu") return "var(--green)";
+  if (status === "sinirda") return "var(--teal)";
+  if (status === "yakin" || status === "bos") return "var(--gold)";
   return "var(--t3)";
+}
+
+function statusLabel(status: string) {
+  if (status === "guclu") return "Yerleşir gibi";
+  if (status === "sinirda") return "Sınırda";
+  if (status === "yakin") return "Yakın";
+  if (status === "bos") return "Boş kalmış";
+  return "Uzak";
 }
 
 export default function TusScore() {
   const { state } = useApp();
   const [overrides, setOverrides] = useState<Record<string, number>>({});
+  const [programQuery, setProgramQuery] = useState("");
 
   const sectionRows = useMemo(() => {
     return TUS_SECTIONS.map((section) => {
@@ -37,9 +46,8 @@ export default function TusScore() {
   const tusPuan = calcTusPuan(temelNet, klinikNet);
   const spTemel = calcSpTemel(temelNet);
   const spKlinik = calcSpKlinik(klinikNet);
-  const matches = getPlacementMatches(tusPuan);
-  const possible = matches.filter((m) => m.status === "güçlü" || m.status === "sınırda");
-  const near = matches.filter((m) => m.status === "yakın").slice(0, 5);
+  const programMatches = searchTusPrograms(programQuery, tusPuan, programQuery.trim() ? 16 : 12);
+  const possible = programMatches.filter((m) => m.status === "guclu" || m.status === "sinirda" || m.status === "bos");
 
   return (
     <div className="score-page">
@@ -47,7 +55,7 @@ export default function TusScore() {
         <div>
           <div className="eyebrow">TUS puan ve yerleşme simülatörü</div>
           <h1>{tusPuan.toFixed(1)}</h1>
-          <p>Temel ve Klinik Bilimler netlerinden tahmini TUS puanı hesaplanır; ÖSYM yerleştirme taban puanlarına göre hangi branşlara yakın olduğun gösterilir.</p>
+          <p>Temel ve Klinik Bilimler netlerinden tahmini TUS puanı hesaplanır; ÖSYM yerleştirme taban puanlarına göre kurum ve bölüm bazında arama yapabilirsin.</p>
           <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer">Kaynak: {TUS_SCORE_SOURCE.label}</a>
         </div>
         <div className="score-metrics">
@@ -61,27 +69,37 @@ export default function TusScore() {
         <div className="panel-head">
           <div>
             <div className="eyebrow">Nereye yerleşebilirim?</div>
-            <h2>Branş olasılıkları</h2>
+            <h2>Kurum ve bölüm ara</h2>
           </div>
-          <span className="tag tag-teal">{possible.length} güçlü/sınırda seçenek</span>
+          <span className="tag tag-teal">{possible.length} uygun/yakın seçenek</span>
+        </div>
+        <div className="placement-search">
+          <input
+            value={programQuery}
+            onChange={(e) => setProgramQuery(e.target.value)}
+            placeholder="Örn: OMÜ plastik, Ankara göz, Hacettepe radyoloji"
+          />
+          <span>{programQuery.trim() ? "Arama sonucu" : "Puanına göre en yüksek yakın kurumlar"}</span>
         </div>
         <div className="placement-grid">
-          {matches.slice(0, 18).map((item) => (
-            <div className={`placement-card ${item.status}`} key={item.branch}>
+          {programMatches.map((item) => (
+            <div className={`placement-card program-card ${item.status}`} key={item.code}>
               <div>
-                <strong>{item.branch}</strong>
-                <span>{item.competitiveness} rekabet</span>
+                <strong>{item.institution}</strong>
+                <span>{item.specialty}</span>
+                <small>{item.message}</small>
               </div>
               <div>
-                <b>{item.min.toFixed(1)}</b>
-                <em style={{ color: statusColor(item.status) }}>{item.status}</em>
+                <b>{item.minScore === null ? "Boş" : item.minScore.toFixed(2)}</b>
+                <em style={{ color: statusColor(item.status) }}>{statusLabel(item.status)}</em>
+                <small>{item.placed}/{item.quota} yerleşen</small>
               </div>
             </div>
           ))}
         </div>
-        {near.length > 0 && (
+        {programQuery.trim() && programMatches.length === 0 && (
           <div className="near-note">
-            <strong>En yakın hedefler:</strong> {near.map((n) => `${n.branch} için +${Math.abs(n.diff).toFixed(1)} puan`).join(" · ")}
+            Sonuç bulunamadı. Daha kısa aramayı dene: “plastik”, “ankara göz”, “ondokuz mayıs”.
           </div>
         )}
       </section>
