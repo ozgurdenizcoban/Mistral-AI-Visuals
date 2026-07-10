@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, parseJSON } from "@/lib/mistral";
 import { fbGetQuestions, fbSaveQuestions, QuizQuestion } from "@/lib/firestore";
+import { getPlacementMatches, TUS_SCORE_SOURCE } from "@/lib/tusData";
 import { toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -562,6 +563,7 @@ export default function FullTUS() {
   if (phase === "result") {
     const overallPct = answers.length > 0 ? Math.round((totalCorrect / answers.length) * 100) : 0;
     const barPct = Math.max(0, Math.min(100, Math.round(((tusPuan - 40) / 40) * 100)));
+    const placementMatches = getPlacementMatches(tusPuan);
 
     /* Per-category */
     const catMap: Record<string, { correct: number; total: number; group: "temel" | "klinik"; icon: string }> = {};
@@ -615,6 +617,30 @@ export default function FullTUS() {
             </div>
             <div style={{ fontSize: ".7rem", color: "var(--t2)", marginTop: 6 }}>{klinikCorrect}/{klinikTotal} · net {Math.max(0, klinikNet)}</div>
             <div style={{ fontSize: ".62rem", color: "var(--t3)", marginTop: 3 }}>SP: {(50 + 10 * (klinikNet200 - KB_MEAN) / KB_SD).toFixed(1)}</div>
+          </div>
+        </div>
+
+        <div className="placement-panel" style={{ marginBottom: 20 }}>
+          <div className="panel-head">
+            <div>
+              <div className="eyebrow">Nereye yerleşebilirim?</div>
+              <h2>Deneme puanına göre branşlar</h2>
+            </div>
+            <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer" style={{ color: "var(--t3)", fontSize: ".7rem" }}>ÖSYM verisi</a>
+          </div>
+          <div className="placement-grid">
+            {placementMatches.slice(0, 12).map((item) => (
+              <div className={`placement-card ${item.status}`} key={item.branch}>
+                <div>
+                  <strong>{item.branch}</strong>
+                  <span>{item.competitiveness} rekabet</span>
+                </div>
+                <div>
+                  <b>{item.min.toFixed(1)}</b>
+                  <em>{item.status}</em>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

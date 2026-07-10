@@ -2,129 +2,65 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { TREE, SR_INTERVALS } from "@/lib/data";
 import { mistralText } from "@/lib/mistral";
-import { toDay, addDays } from "@/lib/utils";
+import { getFocusedReviewPlan, getScoreSimulation } from "@/lib/studyInsights";
+import { addDays, toDay } from "@/lib/utils";
 import { toast } from "sonner";
-import type { SREntry } from "@/contexts/AppContext";
-import { getFocusedReviewPlan, getScoreSimulation, getTopicInsights } from "@/lib/studyInsights";
 
 export default function Review() {
-  const { state, saveState, setNoteTarget, setCurrentPage } = useApp();
-  const [planLoading, setPlanLoading] = useState(false);
+  const { state, saveState, setNoteTarget, setCurrentPage, setQuizTarget } = useApp();
   const [planHtml, setPlanHtml] = useState<string | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
   const [tusDate, setTusDate] = useState("");
   const [hoursPerDay, setHoursPerDay] = useState(4);
   const [targetScore, setTargetScore] = useState(65);
-  const [strategy, setStrategy] = useState<"dengeli" | "zayif" | "guclu">("dengeli");
 
   const today = toDay();
-  const allTopics: { name: string; cat: string; icon: string; sr?: SREntry; due: boolean; overdue: boolean }[] = [];
-  TREE.forEach((b) => b.topics.forEach((t) => {
-    const sr = state.sr?.[t];
-    const nextDate = sr?.nextDate;
-    const due = !!nextDate && nextDate <= today;
-    const overdue = !!nextDate && nextDate < today;
-    if (sr?.studyCount || due) {
-      allTopics.push({ name: t, cat: b.cat, icon: b.icon, sr, due, overdue });
-    }
-  }));
-
-  const focusedReviewList = getFocusedReviewPlan(state, today, 14);
-  const dueTodayList = focusedReviewList.filter((t) => t.due || t.overdue).slice(0, 10);
-  const aiFocusList = focusedReviewList.slice(0, 8);
-  const upcomingList = allTopics.filter((t) => !t.due && t.sr?.nextDate);
-  const completedList = allTopics.filter((t) => t.sr?.studyCount && !t.sr?.nextDate);
-  const previewDaysLeft = tusDate
-    ? Math.max(1, Math.round((new Date(tusDate).getTime() - Date.now()) / 86400000))
-    : 90;
-  const simulation = getScoreSimulation(state, previewDaysLeft, hoursPerDay, targetScore);
-  const topWeakInsights = getTopicInsights(state).slice(0, 8);
+  const focus = getFocusedReviewPlan(state, today, 10);
+  const due = focus.filter((t) => t.due || t.overdue).slice(0, 5);
+  const next = focus.filter((t) => !t.due && !t.overdue).slice(0, 5);
+  const daysLeft = tusDate ? Math.max(1, Math.round((new Date(tusDate).getTime() - Date.now()) / 86400000)) : 90;
+  const sim = getScoreSimulation(state, daysLeft, hoursPerDay, targetScore);
 
   function openNote(topic: string) {
     const branch = TREE.find((b) => b.topics.includes(topic));
-    if (branch) {
-      setNoteTarget({ cat: branch.cat, icon: branch.icon, topic });
-      setCurrentPage("notes");
-    }
+    if (!branch) return;
+    setNoteTarget({ cat: branch.cat, icon: branch.icon, topic });
+    setCurrentPage("notes");
+  }
+
+  function startQuiz(cat: string, topic: string) {
+    setQuizTarget({ cat, topic });
+    setCurrentPage("quiz");
   }
 
   function markStudied(topic: string) {
-    const s = { ...state };
-    s.sr = { ...s.sr };
+    const s = { ...state, sr: { ...state.sr } };
     const cur = s.sr[topic] || { level: 0, studyCount: 0 };
     const level = Math.min((cur.level || 0) + 1, SR_INTERVALS.length - 1);
-    s.sr[topic] = {
-      ...cur,
-      level,
-      studyCount: (cur.studyCount || 0) + 1,
-      nextDate: addDays(SR_INTERVALS[level]),
-    };
+    s.sr[topic] = { ...cur, level, studyCount: (cur.studyCount || 0) + 1, nextDate: addDays(SR_INTERVALS[level]) };
     saveState(s);
-    toast.success(`${topic} tekrar edildi! Sonraki: ${SR_INTERVALS[level]} gün sonra`);
+    toast.success("Tekrar kaydedildi");
   }
 
   async function generatePlan() {
-    if (!tusDate) { toast.error("Lütfen TUS tarihini seçin"); return; }
-    const tusDateObj = new Date(tusDate);
-    if (tusDateObj <= new Date()) { toast.error("TUS tarihi bugünden ileri olmalı"); return; }
-    const daysLeft = Math.max(0, Math.round((tusDateObj.getTime() - Date.now()) / 86400000));
-    const sim = getScoreSimulation(state, daysLeft, hoursPerDay, targetScore);
-
     setPlanLoading(true);
-    const strategyLabel = { dengeli: "Dengeli", zayif: "Zayıf konulara ağırlık", guclu: "Güçlü konuları pekiştir" }[strategy];
-    const priorityList = focusedReviewList.map((t, i) => `${i + 1}. ${t.topic} (${t.cat}) | oncelik: ${t.priority} | durum: ${t.urgency} | tekrar: ${t.studyCount}x | hata: ${t.mistakes} | neden: ${t.reason}`).join("\n");
-
-    const weakPriorityList = getTopicInsights(state)
-      .slice(0, 35)
-      .map((t, i) => `${i + 1}. ${t.topic} (${t.cat}) | hata: ${t.mistakes} | tekrar: ${t.studyCount}x | neden: ${t.reason}`)
-      .join("\n");
-
-    const weeksToShow = Math.min(Math.max(1, Math.ceil(daysLeft / 7)), 12);
-    const h = hoursPerDay;
-
-    const prompt = `Sen TUS sınavına hazırlayan uzman bir hocasın. Aşağıdaki verilere göre DETAYLI ve BAŞARIYA ODAKLI bir çalışma planı hazırla.
-
-=== ÖĞRENCİ PROFİLİ ===
-Çözülen soru: ${state.total} | Doğruluk: ${state.total > 0 ? Math.round((state.correct / state.total) * 100) : 0}% | Seri: ${state.streak} gün
-TUS tarihi: ${daysLeft} gün kaldı (yaklaşık ${weeksToShow} hafta)
-Günlük çalışma: ${h} saat
-Strateji: ${strategyLabel}
+    const priorityList = focus.map((t, i) => `${i + 1}. ${t.topic} (${t.cat}) - ${t.reason} - ${t.action}`).join("\n");
+    const prompt = `TUS öğrencisi için sade, anlaşılır çalışma planı hazırla.
 Hedef puan: ${targetScore}
-Mevcut tahmini puan bandi: ${sim.currentBand[0]}-${sim.currentBand[1]}
-Plan uygulanirsa beklenen band: ${sim.expectedBand[0]}-${sim.expectedBand[1]}
-Stretch hedef bandi: ${sim.stretchBand[0]}-${sim.stretchBand[1]}
-Konu kapsami: ${sim.studiedTopics}/${sim.totalTopics} (%${sim.coveragePct})
-Gunluk soru hedefi: ${sim.dailyQuestionTarget}
-Gunluk tekrar hedefi: ${sim.dailyReviewTarget}
-Zayif konu sayisi: ${sim.weakTopicCount}
-
-=== AI ÖNCELİK SIRASI (hata + gecikmiş tekrar + kapsam + ders performansı) ===
+Günlük süre: ${hoursPerDay} saat
+Kalan gün: ${daysLeft}
+Tahmini band: ${sim.currentBand[0]}-${sim.currentBand[1]} -> planla ${sim.expectedBand[0]}-${sim.expectedBand[1]}
+Öncelikler:
 ${priorityList}
 
-=== PROFESYONEL RISK SIRASI (Hata + tekrar + kategori performansi) ===
-${weakPriorityList}
-
-Planin basinda hedef puan simulasyonu, beklenen puan bandi, en kritik zayif halkalar tablosu ve gunluk soru/tekrar hedeflerini mutlaka HTML olarak ver.
-
-=== ÇIKTI FORMATI (SADECE HTML, markdown yok) ===
-<h3>Genel Değerlendirme ve Plan Stratejisi</h3>
-<p>3-4 somut cümle.</p>
-
-HER HAFTA (toplam ${weeksToShow} hafta):
-<h3>Hafta N — [Ana tema]</h3>
-<table><thead><tr><th>Gün</th><th>Sabah — Konu</th><th>Öğle — Soru</th><th>Akşam — Analiz</th><th>Hedef</th></tr></thead><tbody>
-[7 satır: Pazartesi-Pazar]
-</tbody></table>
-
-EN SON:
-<div class="tip"><strong>En Büyük Avantajın:</strong> ...</div>
-<div class="warn"><strong>Kritik Eksik:</strong> ...</div>
-
-Şimdi yaz. ${weeksToShow} haftanın tamamını eksiksiz yaz:`;
-
+SADECE HTML dön. Kısa olsun.
+<h3>Bu Haftanın Hedefi</h3>
+<p>...</p>
+<table><thead><tr><th>Gün</th><th>1. iş</th><th>Soru</th><th>Kontrol</th></tr></thead><tbody>7 satır</tbody></table>
+<div class="tip"><strong>Beklenen sonuç:</strong> ...</div>`;
     try {
-      const html = await mistralText(prompt, 30000, 0.3);
-      const clean = html.replace(/^```(?:html)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-      setPlanHtml(clean);
+      const html = await mistralText(prompt, 12000, 0.25);
+      setPlanHtml(html.replace(/^```(?:html)?\s*/i, "").replace(/\s*```\s*$/, "").trim());
     } catch (e) {
       toast.error("Plan oluşturulamadı: " + (e as Error).message);
     } finally {
@@ -132,233 +68,73 @@ EN SON:
     }
   }
 
+  const TaskRow = ({ item, index }: { item: (typeof focus)[number]; index: number }) => (
+    <div className="simple-task">
+      <div className="task-no">{index + 1}</div>
+      <div className="task-main">
+        <strong>{item.topic}</strong>
+        <span>{item.cat} · {item.reason}</span>
+      </div>
+      <div className="task-actions">
+        <button className="btn btn-ghost sm" onClick={() => openNote(item.topic)}>Not</button>
+        <button className="btn btn-teal sm" onClick={() => startQuiz(item.cat, item.topic)}>Quiz</button>
+        <button className="btn btn-primary sm" onClick={() => markStudied(item.topic)}>Bitti</button>
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div>
-        <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>
-          Tekrar Planı
+    <div className="review-simple">
+      <section className="review-hero">
+        <div>
+          <div className="eyebrow">Tekrar planı</div>
+          <h1>Bugün sadece önemli olanlar</h1>
+          <p>Kalabalık liste yok. Sistem hata, tekrar tarihi ve konu kapsamına göre en mantıklı işleri seçer.</p>
         </div>
-        <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>
-          Aralıklı tekrar (Spaced Repetition) ile kalıcı öğrenme
+        <div className="review-score">
+          <strong>{sim.expectedBand[0]}-{sim.expectedBand[1]}</strong>
+          <span>Planla beklenen puan bandı</span>
         </div>
-      </div>
+      </section>
 
-      {/* Due today */}
-      {dueTodayList.length > 0 && (
-        <div className="card">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--ac)", textTransform: "uppercase", letterSpacing: ".08em" }}>
-              ⏰ Bugün Tekrar Edilmesi Gerekenler ({dueTodayList.length})
+      <section className="review-grid">
+        <div className="panel">
+          <div className="panel-head compact">
+            <div>
+              <div className="eyebrow">1. adım</div>
+              <h2>Bugün tekrar et</h2>
+            </div>
+            <span className="tag tag-teal">{due.length}</span>
+          </div>
+          {due.length ? due.map((item, i) => <TaskRow key={item.topic} item={item} index={i} />) : <div className="empty-state">Bugün zorunlu tekrar yok. Aşağıdaki önceliklerden birini seç.</div>}
+        </div>
+
+        <div className="panel">
+          <div className="panel-head compact">
+            <div>
+              <div className="eyebrow">2. adım</div>
+              <h2>Sıradaki öncelikler</h2>
             </div>
           </div>
-          {dueTodayList.map((t) => (
-            <div key={t.topic} className="sr-item">
-              <span style={{ fontSize: "1rem" }}>{t.icon}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: ".82rem", fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.topic}</div>
-                <div style={{ fontSize: ".68rem", color: "var(--t2)" }}>{t.cat} · {t.reason} · {t.studyCount || 0}× çalışıldı</div>
-              </div>
-              <span className={`sr-due${t.overdue ? " overdue" : " soon"}`}>
-                {t.overdue ? "Gecikmiş" : "Bugün"}
-              </span>
-              <div style={{ display: "flex", gap: 5 }}>
-                <button className="btn btn-teal sm" onClick={() => openNote(t.topic)}>Oku</button>
-                <button className="btn btn-ghost sm" onClick={() => markStudied(t.topic)}>✓</button>
-              </div>
-            </div>
-          ))}
+          {next.map((item, i) => <TaskRow key={item.topic} item={item} index={i} />)}
         </div>
-      )}
+      </section>
 
-      {dueTodayList.length === 0 && (
-        <div style={{ background: "var(--grd)", border: "1px solid rgba(52,211,153,.2)", borderRadius: 12, padding: "18px 22px" }}>
-          <div style={{ color: "var(--green)", fontWeight: 700, marginBottom: 4 }}>✓ Bugün için tekrar yok!</div>
-          <div style={{ color: "var(--t2)", fontSize: ".8rem" }}>Tüm tekrarlarını tamamladın veya henüz çalışılmış konu yok.</div>
-        </div>
-      )}
-
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+      <section className="panel">
+        <div className="panel-head">
           <div>
-            <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--teal)", textTransform: "uppercase", letterSpacing: ".08em" }}>
-              AI Odak Listesi
-            </div>
-            <div style={{ color: "var(--t2)", fontSize: ".78rem", marginTop: 5 }}>
-              Tüm dersler içinden bugün en yüksek getirili konular. Liste kısa tutulur; kalabalık konu yığını göstermez.
-            </div>
+            <div className="eyebrow">İstersen haftalık plan</div>
+            <h2>AI planı sade oluşturur</h2>
           </div>
-          <span className="tag tag-gold">{aiFocusList.length} öncelik</span>
+          <button className="btn btn-primary" onClick={generatePlan} disabled={planLoading}>{planLoading ? "Hazırlanıyor..." : "Plan oluştur"}</button>
         </div>
-
-        {aiFocusList.map((t, i) => (
-          <div key={t.topic} className="sr-item priority">
-            <div className="weak-rank">{i + 1}</div>
-            <span style={{ fontSize: "1rem" }}>{t.icon}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: ".82rem", fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.topic}</div>
-              <div style={{ fontSize: ".69rem", color: "var(--t2)", lineHeight: 1.45 }}>{t.cat} · {t.reason} · {t.action}</div>
-            </div>
-            <span className={`sr-due${t.overdue ? " overdue" : t.due ? " soon" : ""}`}>{t.urgency}</span>
-            <div style={{ display: "flex", gap: 5 }}>
-              <button className="btn btn-ghost sm" onClick={() => openNote(t.topic)}>Oku</button>
-              <button className="btn btn-teal sm" onClick={() => markStudied(t.topic)}>✓</button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Upcoming */}
-      {upcomingList.length > 0 && (
-        <div className="card">
-          <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--teal)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 12 }}>
-            📅 Yaklaşan Tekrarlar ({upcomingList.length})
-          </div>
-          {upcomingList.sort((a, b) => (a.sr?.nextDate || "").localeCompare(b.sr?.nextDate || "")).slice(0, 10).map((t) => (
-            <div key={t.name} className="sr-item">
-              <span style={{ fontSize: "1rem" }}>{t.icon}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: ".82rem", fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
-                <div style={{ fontSize: ".68rem", color: "var(--t2)" }}>{t.cat} · {t.sr?.studyCount || 0}× çalışıldı</div>
-              </div>
-              <span style={{ fontSize: ".72rem", color: "var(--teal)", background: "var(--td)", padding: "2px 8px", borderRadius: 12, fontWeight: 700 }}>
-                {t.sr?.nextDate}
-              </span>
-              <button className="btn btn-ghost sm" onClick={() => openNote(t.name)}>Oku</button>
-            </div>
-          ))}
+        <div className="plan-controls-simple">
+          <label>TUS tarihi <input type="date" value={tusDate} onChange={(e) => setTusDate(e.target.value)} /></label>
+          <label>Günlük saat <input type="number" min={1} max={12} value={hoursPerDay} onChange={(e) => setHoursPerDay(Number(e.target.value) || 4)} /></label>
+          <label>Hedef puan <input type="number" min={35} max={90} value={targetScore} onChange={(e) => setTargetScore(Number(e.target.value) || 65)} /></label>
         </div>
-      )}
-
-      {/* SR intervals info */}
-      <div className="card">
-        <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10 }}>
-          SM-2 Aralıklı Tekrar Sistemi
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {SR_INTERVALS.map((d, i) => (
-            <div key={i} style={{ textAlign: "center", background: "var(--ink3)", borderRadius: 9, padding: "9px 14px" }}>
-              <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.2rem", fontWeight: 900, color: "var(--teal)" }}>{d}</div>
-              <div style={{ fontSize: ".62rem", color: "var(--t2)", marginTop: 2 }}>Gün {i === 0 ? "· İlk" : `· Sev.${i}`}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: ".76rem", color: "var(--t2)", marginTop: 10 }}>
-          Her konu okunduğunda bir sonraki tekrar tarihi otomatik hesaplanır.
-        </div>
-      </div>
-
-      {/* AI Study Plan */}
-      <div className="card">
-        <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 14 }}>
-          ✦ AI Çalışma Planı
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }} className="plan-controls">
-          <div>
-            <div style={{ fontSize: ".7rem", fontWeight: 800, color: "var(--t3)", marginBottom: 6, textTransform: "uppercase" }}>TUS Tarihi</div>
-            <input
-              type="date"
-              value={tusDate}
-              onChange={(e) => setTusDate(e.target.value)}
-              style={{
-                width: "100%", padding: "8px 10px", background: "var(--ink3)",
-                border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)",
-                fontFamily: "Syne, sans-serif", fontSize: ".82rem",
-              }}
-            />
-          </div>
-          <div>
-            <div style={{ fontSize: ".7rem", fontWeight: 800, color: "var(--t3)", marginBottom: 6, textTransform: "uppercase" }}>Günlük Saat</div>
-            <select
-              value={hoursPerDay}
-              onChange={(e) => setHoursPerDay(parseInt(e.target.value))}
-              style={{
-                width: "100%", padding: "8px 10px", background: "var(--ink3)",
-                border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)",
-                fontFamily: "Syne, sans-serif", fontSize: ".82rem",
-              }}
-            >
-              {[1, 2, 3, 4, 5, 6, 8].map((h) => <option key={h} value={h}>{h} saat</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={{ fontSize: ".7rem", fontWeight: 800, color: "var(--t3)", marginBottom: 6, textTransform: "uppercase" }}>Strateji</div>
-            <select
-              value={strategy}
-              onChange={(e) => setStrategy(e.target.value as typeof strategy)}
-              style={{
-                width: "100%", padding: "8px 10px", background: "var(--ink3)",
-                border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)",
-                fontFamily: "Syne, sans-serif", fontSize: ".82rem",
-              }}
-            >
-              <option value="dengeli">Dengeli</option>
-              <option value="zayif">Zayıf konulara odak</option>
-              <option value="guclu">Güçlü konuları pekiştir</option>
-            </select>
-          </div>
-          <div>
-            <div style={{ fontSize: ".7rem", fontWeight: 800, color: "var(--t3)", marginBottom: 6, textTransform: "uppercase" }}>Hedef Puan</div>
-            <input
-              type="number"
-              min={35}
-              max={90}
-              value={targetScore}
-              onChange={(e) => setTargetScore(Math.max(35, Math.min(90, parseInt(e.target.value) || 65)))}
-              style={{
-                width: "100%", padding: "8px 10px", background: "var(--ink3)",
-                border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)",
-                fontFamily: "Syne, sans-serif", fontSize: ".82rem",
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="score-sim-card">
-          <div>
-            <div style={{ fontSize: ".68rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em" }}>
-              Hedefe Yönelik Simülasyon
-            </div>
-            <div style={{ color: "var(--t2)", fontSize: ".76rem", marginTop: 6, lineHeight: 1.55 }}>
-              {simulation.message}
-            </div>
-          </div>
-          <div className="score-sim-grid">
-            <div><span>Şu an</span><strong>{simulation.currentBand[0]}-{simulation.currentBand[1]}</strong></div>
-            <div><span>Planla</span><strong>{simulation.expectedBand[0]}-{simulation.expectedBand[1]}</strong></div>
-            <div><span>Günlük</span><strong>{simulation.dailyQuestionTarget} soru</strong></div>
-            <div><span>Tekrar</span><strong>{simulation.dailyReviewTarget} konu</strong></div>
-          </div>
-        </div>
-
-        <div className="weak-mini-list">
-          {topWeakInsights.slice(0, 4).map((w) => (
-            <div key={w.topic}>
-              <strong>{w.topic}</strong>
-              <span>{w.reason}</span>
-            </div>
-          ))}
-        </div>
-
-        <button
-          className="btn btn-primary"
-          onClick={generatePlan}
-          disabled={planLoading}
-        >
-          {planLoading ? <><span className="spin" />Plan Hazırlanıyor...</> : "✦ AI Plan Oluştur"}
-        </button>
-
-
-        {planHtml && (
-          <div style={{ marginTop: 20 }}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button className="btn btn-ghost sm" onClick={() => window.print()}>🖨️ Yazdır / PDF</button>
-              <button className="btn btn-ghost sm" onClick={() => setPlanHtml(null)}>✕ Kapat</button>
-            </div>
-            <div className="plan-output" dangerouslySetInnerHTML={{ __html: planHtml }} />
-          </div>
-        )}
-      </div>
+        {planHtml && <div className="plan-output" style={{ marginTop: 16 }} dangerouslySetInnerHTML={{ __html: planHtml }} />}
+      </section>
     </div>
   );
 }
