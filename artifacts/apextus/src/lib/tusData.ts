@@ -33,31 +33,18 @@ export const TUS_SCORE_SOURCE = {
 };
 
 export const TUS_SECTIONS: TusScoreSection[] = [
-  { label: "Anatomi", group: "Temel", q: 14 },
-  { label: "Histoloji ve Embriyoloji", group: "Temel", q: 10 },
-  { label: "Fizyoloji", group: "Temel", q: 14 },
-  { label: "Biyokimya", group: "Temel", q: 14 },
-  { label: "Mikrobiyoloji", group: "Temel", q: 14 },
-  { label: "Farmakoloji", group: "Temel", q: 14 },
-  { label: "Patoloji", group: "Temel", q: 20 },
-  { label: "Kardiyoloji", group: "Klinik", q: 9 },
-  { label: "Göğüs Hastalıkları", group: "Klinik", q: 7 },
-  { label: "Hematoloji", group: "Klinik", q: 6 },
-  { label: "Nefroloji", group: "Klinik", q: 6 },
-  { label: "Endokrinoloji", group: "Klinik", q: 8 },
-  { label: "Gastroenteroloji", group: "Klinik", q: 6 },
-  { label: "Hepatoloji", group: "Klinik", q: 5 },
-  { label: "Romatoloji", group: "Klinik", q: 5 },
-  { label: "Enfeksiyon Hastalıkları", group: "Klinik", q: 7 },
-  { label: "Onkoloji", group: "Klinik", q: 4 },
-  { label: "Geriatri", group: "Klinik", q: 3 },
-  { label: "Genel Cerrahi", group: "Klinik", q: 10 },
-  { label: "Kadın Hastalıkları ve Doğum", group: "Klinik", q: 8 },
-  { label: "Pediatri", group: "Klinik", q: 8 },
-  { label: "Nöroloji", group: "Klinik", q: 4 },
-  { label: "Psikiyatri", group: "Klinik", q: 2 },
-  { label: "Dermatoloji", group: "Klinik", q: 2 },
-  { label: "Göz Hastalıkları", group: "Klinik", q: 2 },
+  { label: "Anatomi", group: "Temel", q: 13 },
+  { label: "Histoloji ve Embriyoloji", group: "Temel", q: 7 },
+  { label: "Fizyoloji", group: "Temel", q: 8 },
+  { label: "Biyokimya", group: "Temel", q: 18 },
+  { label: "Mikrobiyoloji", group: "Temel", q: 18 },
+  { label: "Patoloji", group: "Temel", q: 18 },
+  { label: "Farmakoloji", group: "Temel", q: 18 },
+  { label: "Dahiliye", group: "Klinik", q: 23 },
+  { label: "Pediatri", group: "Klinik", q: 25 },
+  { label: "Genel Cerrahi", group: "Klinik", q: 20 },
+  { label: "Kadin Hastaliklari ve Dogum", group: "Klinik", q: 10 },
+  { label: "Kucuk Stajlar", group: "Klinik", q: 22 },
 ];
 
 // Branch-level quick orientation; institution-level checks use TUS_PROGRAMS below.
@@ -95,19 +82,25 @@ export function netScore(correct: number, wrong: number) {
   return correct - wrong / 4;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export function calcTusPuan(temelNet: number, klinikNet: number): number {
-  const spTemel = 50 + 10 * (temelNet - 42) / 16;
-  const spKlinik = 50 + 10 * (klinikNet - 43) / 16;
+  const safeTemelNet = clamp(temelNet, -25, 100);
+  const safeKlinikNet = clamp(klinikNet, -25, 100);
+  const spTemel = 50 + 10 * (safeTemelNet - 42) / 16;
+  const spKlinik = 50 + 10 * (safeKlinikNet - 43) / 16;
   const puan = 0.4 * spTemel + 0.6 * spKlinik;
   return Math.max(0, Math.min(100, Math.round(puan * 10) / 10));
 }
 
 export function calcSpTemel(net: number) {
-  return Math.max(0, Math.min(100, Math.round((50 + 10 * (net - 42) / 16) * 10) / 10));
+  return Math.max(0, Math.min(100, Math.round((50 + 10 * (clamp(net, -25, 100) - 42) / 16) * 10) / 10));
 }
 
 export function calcSpKlinik(net: number) {
-  return Math.max(0, Math.min(100, Math.round((50 + 10 * (net - 43) / 16) * 10) / 10));
+  return Math.max(0, Math.min(100, Math.round((50 + 10 * (clamp(net, -25, 100) - 43) / 16) * 10) / 10));
 }
 
 export function getPlacementMatches(score: number) {

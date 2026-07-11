@@ -11,7 +11,7 @@ type Phase = "setup" | "generating" | "quiz" | "review" | "result";
 type Scale = 50 | 100 | 200;
 
 /* ================================================================
-   TUS tam dağılımı
+   TUS tam dagilimi
 ================================================================ */
 interface TusSubject {
   cat: string;
@@ -22,69 +22,39 @@ interface TusSubject {
 }
 
 const FULL_TUS_SUBJECTS: TusSubject[] = [
-  // ── TEMEL BİLİMLER (100 soru) ──────────────────────────────────
-  { cat: "Anatomi", group: "temel", q200: 14, icon: "🦴",
-    topics: ["Extremite ve Kol-Bacak Anatomisi", "Baş-Boyun Anatomisi", "Toraks Anatomisi", "Abdominal ve Pelvik Anatomi", "Nöroanatomi", "Klinik Sinir-Damar İlişkileri"] },
-  { cat: "Histoloji", group: "temel", q200: 10, icon: "🔬",
-    topics: ["Epitel ve Bez Dokusu", "Bağ ve Kıkırdak Dokusu", "Kas Dokusu", "Sinir Dokusu", "Kan Hücreleri", "Organ Histolojisi"] },
-  { cat: "Fizyoloji", group: "temel", q200: 14, icon: "⚡",
-    topics: ["Kardiyovasküler Fizyoloji", "Solunum Fizyolojisi", "Renal Fizyoloji", "Sinir Sistemi Fizyolojisi", "GİS Fizyolojisi", "Endokrin Fizyoloji"] },
-  { cat: "Biyokimya", group: "temel", q200: 14, icon: "🧪",
-    topics: ["Karbonhidrat Metabolizması", "Lipid Metabolizması", "Protein ve Amino Asit Metabolizması", "Enzim Kinetiği", "Nükleik Asitler", "Vitaminler ve Kofaktörler"] },
-  { cat: "Mikrobiyoloji", group: "temel", q200: 14, icon: "🦠",
-    topics: ["Gram Pozitif Bakteriler", "Gram Negatif Bakteriler", "Virüsler", "Mantar ve Parazitler", "İmmünoloji Temelleri", "Antimikrobiyal Direnç"] },
-  { cat: "Farmakoloji", group: "temel", q200: 14, icon: "💊",
-    topics: ["Farmakokinetik/Farmakodinami", "Otonom İlaçlar", "Kardiyovasküler İlaçlar", "Antibiyotikler ve Antimikrobiyaller", "SSS İlaçları", "NSAİİ ve Analjezikler"] },
-  { cat: "Patoloji", group: "temel", q200: 20, icon: "🔭",
-    topics: ["Hücre Hasarı ve Ölüm", "İnflamasyon ve Tamir", "Neoplazi", "Kardiyovasküler Patoloji", "Pulmoner Patoloji", "GİS Patolojisi", "Böbrek Patolojisi", "Hematolojik Neoplaziler"] },
-  // ── KLİNİK — DAHİLİYE (66 soru) ───────────────────────────────
-  { cat: "Kardiyoloji", group: "klinik", q200: 9, icon: "🫀",
-    topics: ["Akut Koroner Sendrom", "Kalp Yetmezliği", "Aritmiler", "Kapak Hastalıkları", "Hipertansiyon", "Perikard Hastalıkları"] },
-  { cat: "Göğüs Hastalıkları", group: "klinik", q200: 7, icon: "🫁",
-    topics: ["KOAH ve Astım", "Pulmoner Emboli", "Pnömoni", "Akciğer Kanseri", "Plevral Efüzyon", "Tüberküloz"] },
-  { cat: "Hematoloji", group: "klinik", q200: 6, icon: "🩸",
-    topics: ["Anemiler", "Lenfomalar", "Lösemiler", "Koagülasyon Bozuklukları", "Multipl Myelom"] },
-  { cat: "Nefroloji", group: "klinik", q200: 6, icon: "🫘",
-    topics: ["Akut Böbrek Hasarı", "Kronik Böbrek Hastalığı", "Glomerülonefritler", "Elektrolit Bozuklukları", "Asit-Baz"] },
-  { cat: "Endokrinoloji", group: "klinik", q200: 8, icon: "⚗️",
-    topics: ["Diabetes Mellitus", "Tiroid Hastalıkları", "Adrenal Hastalıklar", "Hipofiz Hastalıkları", "Kalsiyum Metabolizması"] },
-  { cat: "Gastroenteroloji", group: "klinik", q200: 6, icon: "🫃",
-    topics: ["Peptik Ülser Hastalığı", "İnflamatuvar Barsak Hastalığı", "Kolorektal Kanser", "GİS Kanamaları", "Pankreas Hastalıkları"] },
-  { cat: "Hepatoloji", group: "klinik", q200: 5, icon: "🟤",
-    topics: ["Viral Hepatitler", "Karaciğer Sirozu", "Hepatoselüler Karsinom", "Metabolik Karaciğer Hastalıkları"] },
-  { cat: "Romatoloji", group: "klinik", q200: 5, icon: "🦴",
-    topics: ["Romatoid Artrit", "Sistemik Lupus Eritematozus", "Spondiloartropatiler", "Vaskülitler", "Gut"] },
-  { cat: "Enfeksiyon Hastalıkları", group: "klinik", q200: 7, icon: "🦠",
-    topics: ["Pnömoniler", "Menenjit ve Ensefalit", "HIV/AIDS", "Sepsis", "Üriner Sistem Enfeksiyonları", "Tüberküloz"] },
-  { cat: "Onkoloji", group: "klinik", q200: 4, icon: "🎗️",
-    topics: ["Paraneoplastik Sendromlar", "Onkolojik Aciller", "Kemoterapi Yan Etkileri", "Kanser Taraması"] },
-  { cat: "Geriatri", group: "klinik", q200: 3, icon: "👴",
-    topics: ["Demans ve Deliryum", "Polifarmasi", "Geriatrik Kırılganlık", "Düşme"] },
-  // ── KLİNİK — DİĞER (34 soru) ───────────────────────────────────
-  { cat: "Genel Cerrahi", group: "klinik", q200: 10, icon: "🔪",
-    topics: ["Akut Karın ve Appendisit", "Safra Yolu Hastalıkları", "İleus ve Obstriksiyon", "GİS Tümörleri", "Meme Hastalıkları", "Herni", "Tiroid ve Adrenal Cerrahi"] },
-  { cat: "Kadın Doğum", group: "klinik", q200: 8, icon: "👶",
-    topics: ["Normal Gebelik", "Gebelik Komplikasyonları (Preeklampsi, Plasenta)", "Normal ve Patolojik Doğum", "Jinekolojik Kanserler", "Menstrüel Bozukluklar", "Enfeksiyonlar"] },
-  { cat: "Pediatri", group: "klinik", q200: 8, icon: "🧒",
-    topics: ["Neonatal Dönem", "Aşılama Takvimi", "Çocukluk Çağı Enfeksiyonları", "Pediatrik Aciller", "Gelişim Basamakları", "Çocukluk Kanserleri"] },
-  { cat: "Nöroloji", group: "klinik", q200: 4, icon: "🧠",
-    topics: ["İnme", "Epilepsi", "MS ve Demiyelinizan Hastalıklar", "Periferik Nöropati", "Hareket Bozuklukları"] },
-  { cat: "Psikiyatri", group: "klinik", q200: 2, icon: "🧘",
-    topics: ["Şizofreni ve Psikozlar", "Duygudurum Bozuklukları", "Anksiyete", "Madde Kullanım Bozuklukları"] },
-  { cat: "Dermatoloji", group: "klinik", q200: 2, icon: "🩹",
-    topics: ["Psoriazis, Ekzema, Akne", "Deri Kanserleri ve Melanom"] },
-  { cat: "Göz Hastalıkları", group: "klinik", q200: 2, icon: "👁️",
-    topics: ["Glokom ve Katarakt", "Retina Hastalıkları", "Acil Göz Durumları"] },
+  { cat: "Anatomi", group: "temel", q200: 13, icon: "An",
+    topics: ["Bas-boyun anatomisi", "Toraks anatomisi", "Abdomen-pelvis", "Ekstremite anatomisi", "Noroanatomi", "Klinik damar-sinir iliskileri"] },
+  { cat: "Histoloji ve Embriyoloji", group: "temel", q200: 7, icon: "Hi",
+    topics: ["Epitel ve bag dokusu", "Kas ve sinir dokusu", "Organ histolojisi", "Embriyolojik gelisim", "Konjenital anomaliler"] },
+  { cat: "Fizyoloji", group: "temel", q200: 8, icon: "Fi",
+    topics: ["Kardiyovaskuler fizyoloji", "Solunum", "Renal", "Sinir sistemi", "GIS", "Endokrin fizyoloji"] },
+  { cat: "Biyokimya", group: "temel", q200: 18, icon: "Bi",
+    topics: ["Karbonhidrat metabolizmasi", "Lipid metabolizmasi", "Amino asit metabolizmasi", "Enzimler", "Nukleik asitler", "Vitaminler"] },
+  { cat: "Mikrobiyoloji", group: "temel", q200: 18, icon: "Mi",
+    topics: ["Bakteriyoloji", "Viroloji", "Mikoloji", "Parazitoloji", "Immunoloji", "Antimikrobiyal direnc"] },
+  { cat: "Patoloji", group: "temel", q200: 18, icon: "Pa",
+    topics: ["Hucre hasari", "Inflamasyon", "Neoplazi", "Sistem patolojileri", "Hematopatoloji", "Immunopatoloji"] },
+  { cat: "Farmakoloji", group: "temel", q200: 18, icon: "Fa",
+    topics: ["Farmakokinetik", "Otonom ilaclar", "Kardiyovaskuler ilaclar", "Antimikrobiyaller", "SSS ilaclari", "Analjezikler"] },
+  { cat: "Dahiliye", group: "klinik", q200: 23, icon: "Da",
+    topics: ["Kardiyoloji", "Gogus hastaliklari", "Nefroloji", "Endokrinoloji", "Gastroenteroloji", "Hematoloji", "Romatoloji", "Enfeksiyon"] },
+  { cat: "Pediatri", group: "klinik", q200: 25, icon: "Pe",
+    topics: ["Neonatoloji", "Buyume-gelisme", "Beslenme", "Pediatrik enfeksiyon", "Genetik-metabolik", "Pediatrik aciller"] },
+  { cat: "Genel Cerrahi", group: "klinik", q200: 20, icon: "Ce",
+    topics: ["Akut batin", "Travma", "Hepatobiliyer cerrahi", "Meme hastaliklari", "Endokrin cerrahi", "Kolorektal hastaliklar"] },
+  { cat: "Kadin Hastaliklari ve Dogum", group: "klinik", q200: 10, icon: "KD",
+    topics: ["Gebelik izlemi", "Obstetrik aciller", "Jinekolojik tumorler", "Infertilite", "Menstruel bozukluklar"] },
+  { cat: "Kucuk Stajlar", group: "klinik", q200: 22, icon: "KS",
+    topics: ["Noroloji", "Psikiyatri", "Dermatoloji", "Goz", "KBB", "Ortopedi", "Uroloji", "Anestezi", "Radyoloji", "Acil"] },
 ];
-// Doğrulama: 14+10+14+14+14+14+20=100, 9+7+6+6+8+6+5+5+7+4+3=66, 10+8+8+4+2+2+2=36 → toplam 202
-// Not: Dermatoloji ve Göz'ü 2'şer soru yaptım, 202 soruda kuyruğu kesiyorum — tam dağılım 200
+// Dogrulama: Temel Bilimler 100 soru, Klinik Bilimler 100 soru.
 const SCALE_OPTIONS: { label: string; val: Scale; desc: string }[] = [
-  { val: 50,  label: "Hızlı Deneme",  desc: "~50 soru · ~25 dk üretim" },
-  { val: 100, label: "Yarı TUS",      desc: "~100 soru · ~45 dk üretim" },
-  { val: 200, label: "Tam TUS",       desc: "~200 soru · ~60 dk üretim" },
+  { val: 50, label: "Hizli Deneme", desc: "~50 soru - ~25 dk uretim" },
+  { val: 100, label: "Yari TUS", desc: "~100 soru - ~45 dk uretim" },
+  { val: 200, label: "Tam TUS", desc: "~200 soru - ~60 dk uretim" },
 ];
 
-/* TUS puan hesabı (TusScore ile aynı formül) */
+/* TUS puan hesabi (TusScore ile ayni formul) */
 const TB_MEAN = 42; const TB_SD = 16;
 const KB_MEAN = 43; const KB_SD = 16;
 function tusPuanCalc(tNet: number, kNet: number) {
@@ -108,13 +78,12 @@ function pctColor(p: number) {
 }
 
 function placementStatusLabel(status: string) {
-  if (status === "guclu") return "Yerleşir gibi";
-  if (status === "sinirda") return "Sınırda";
-  if (status === "yakin") return "Yakın";
-  if (status === "bos") return "Boş kalmış";
+  if (status === "guclu") return "Yerlesir gibi";
+  if (status === "sinirda") return "Sinirda";
+  if (status === "yakin") return "Yakin";
+  if (status === "bos") return "Bos kalmis";
   return "Uzak";
 }
-
 /* Build per-subject question counts for a given scale */
 function buildPlan(scale: Scale): (TusSubject & { needed: number })[] {
   const ratio = scale / 200;
@@ -632,18 +601,18 @@ export default function FullTUS() {
         <div className="placement-panel" style={{ marginBottom: 20 }}>
           <div className="panel-head">
             <div>
-              <div className="eyebrow">Nereye yerle?ebilirim?</div>
-              <h2>Kurum ve b?l?m kontrol?</h2>
+              <div className="eyebrow">Nereye yerlesebilirim?</div>
+              <h2>Kurum ve bolum kontrolu</h2>
             </div>
-            <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer" style={{ color: "var(--t3)", fontSize: ".7rem" }}>?SYM verisi</a>
+            <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer" style={{ color: "var(--t3)", fontSize: ".7rem" }}>OSYM verisi</a>
           </div>
           <div className="placement-search">
             <input
               value={placementQuery}
               onChange={(e) => setPlacementQuery(e.target.value)}
-              placeholder="?rn: OM? plastik, Ankara g?z"
+              placeholder="Orn: OMU plastik, Ankara goz"
             />
-            <span>{placementQuery.trim() ? "Arama sonucu" : "Deneme puan?na g?re en yak?n kurumlar"}</span>
+            <span>{placementQuery.trim() ? "Arama sonucu" : "Deneme puanina gore en yakin kurumlar"}</span>
           </div>
           <div className="placement-grid">
             {placementMatches.map((item) => (
@@ -654,15 +623,15 @@ export default function FullTUS() {
                   <small>{item.message}</small>
                 </div>
                 <div>
-                  <b>{item.minScore === null ? "Bo?" : item.minScore.toFixed(2)}</b>
+                  <b>{item.minScore === null ? "Bos" : item.minScore.toFixed(2)}</b>
                   <em>{placementStatusLabel(item.status)}</em>
-                  <small>{item.placed}/{item.quota} yerle?en</small>
+                  <small>{item.placed}/{item.quota} yerlesen</small>
                 </div>
               </div>
             ))}
           </div>
           {placementQuery.trim() && placementMatches.length === 0 && (
-            <div className="near-note">Sonu? bulunamad?. Daha k?sa aramay? dene: ?plastik?, ?ankara g?z?, ?ondokuz may?s?.</div>
+            <div className="near-note">Sonuc bulunamadi. Daha kisa aramayi dene: plastik, ankara goz, ondokuz mayis.</div>
           )}
         </div>
         {/* Genel ozet */}

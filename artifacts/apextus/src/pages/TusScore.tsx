@@ -9,6 +9,10 @@ function pctColor(pct: number) {
   return "var(--ac)";
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function statusColor(status: string) {
   if (status === "guclu") return "var(--green)";
   if (status === "sinirda") return "var(--teal)";
@@ -32,17 +36,19 @@ export default function TusScore() {
   const sectionRows = useMemo(() => {
     return TUS_SECTIONS.map((section) => {
       const perf = state.byCat?.[section.label];
-      const pct = overrides[section.label] ?? (perf?.a ? Math.round((perf.c / perf.a) * 100) : 60);
+      const rawPct = overrides[section.label] ?? (perf?.a ? Math.round((perf.c / perf.a) * 100) : 60);
+      const pct = clamp(rawPct, 0, 100);
       const correct = section.q * pct / 100;
       const wrong = section.q * (1 - pct / 100);
-      const net = Math.round(netScore(correct, wrong) * 10) / 10;
+      const rawNet = Math.round(netScore(correct, wrong) * 10) / 10;
+      const net = clamp(rawNet, -section.q / 4, section.q);
       return { ...section, pct, net, hasData: !!perf?.a };
     });
   }, [state.byCat, overrides]);
 
-  const temelNet = Math.round(sectionRows.filter((r) => r.group === "Temel").reduce((sum, r) => sum + r.net, 0) * 10) / 10;
-  const klinikNet = Math.round(sectionRows.filter((r) => r.group === "Klinik").reduce((sum, r) => sum + r.net, 0) * 10) / 10;
-  const totalNet = Math.round((temelNet + klinikNet) * 10) / 10;
+  const temelNet = clamp(Math.round(sectionRows.filter((r) => r.group === "Temel").reduce((sum, r) => sum + r.net, 0) * 10) / 10, -25, 100);
+  const klinikNet = clamp(Math.round(sectionRows.filter((r) => r.group === "Klinik").reduce((sum, r) => sum + r.net, 0) * 10) / 10, -25, 100);
+  const totalNet = clamp(Math.round((temelNet + klinikNet) * 10) / 10, -50, 200);
   const tusPuan = calcTusPuan(temelNet, klinikNet);
   const spTemel = calcSpTemel(temelNet);
   const spKlinik = calcSpKlinik(klinikNet);
@@ -59,8 +65,8 @@ export default function TusScore() {
           <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer">Kaynak: {TUS_SCORE_SOURCE.label}</a>
         </div>
         <div className="score-metrics">
-          <div><span>Temel net</span><strong>{temelNet}</strong><em>SP {spTemel}</em></div>
-          <div><span>Klinik net</span><strong>{klinikNet}</strong><em>SP {spKlinik}</em></div>
+          <div><span>Temel net</span><strong>{temelNet}</strong><em>100 soru · SP {spTemel}</em></div>
+          <div><span>Klinik net</span><strong>{klinikNet}</strong><em>100 soru · SP {spKlinik}</em></div>
           <div><span>Toplam net</span><strong>{totalNet}</strong><em>200 soru</em></div>
         </div>
       </div>
