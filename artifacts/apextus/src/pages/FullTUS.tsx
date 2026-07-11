@@ -3,6 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, parseJSON } from "@/lib/mistral";
 import { fbGetQuestions, fbSaveQuestions, QuizQuestion } from "@/lib/firestore";
 import { calcTusScores, searchTusPrograms, TUS_PLACEMENT_SOURCE } from "@/lib/tusData";
+import { addWrongToPersonalNotes } from "@/lib/personalNotes";
 import { toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -245,7 +246,11 @@ export default function FullTUS() {
     const ns = { ...state };
     ns.total = (ns.total || 0) + 1;
     if (correct) ns.correct = (ns.correct || 0) + 1;
-    else { ns.mistakes = { ...ns.mistakes }; ns.mistakes[q.tags?.[0] || q.cat || "Genel"] = (ns.mistakes[q.tags?.[0] || q.cat || "Genel"] || 0) + 1; }
+    else {
+      ns.mistakes = { ...ns.mistakes };
+      ns.mistakes[q.tags?.[0] || q.cat || "Genel"] = (ns.mistakes[q.tags?.[0] || q.cat || "Genel"] || 0) + 1;
+      Object.assign(ns, addWrongToPersonalNotes(ns, q, idx));
+    }
     ns.byCat = { ...ns.byCat };
     const ck = q.cat || "Genel";
     if (!ns.byCat[ck]) ns.byCat[ck] = { a: 0, c: 0 };

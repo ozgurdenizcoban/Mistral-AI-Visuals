@@ -502,6 +502,37 @@ body {
 .plan-controls-simple { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
 .plan-controls-simple label { color: var(--t2); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .plan-controls-simple input { width: 100%; margin-top: 6px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--ink3); color: var(--text); font-family: "Syne", sans-serif; }
+.plan-controls-simple.single { grid-template-columns: 1fr; }
+.personal-note-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.personal-note-top { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+.personal-note-top h2 { color: var(--cream); font-family: "Playfair Display", serif; font-size: 1.25rem; margin: 4px 0; }
+.personal-note-top p { color: var(--t2); font-size: .78rem; line-height: 1.5; }
+.personal-note-body {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 68vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+.wrong-note-entry {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  background: rgba(0,0,0,.14);
+  padding: 14px;
+}
+.wrong-note-entry .entry-meta { color: var(--teal); font-size: .68rem; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
+.wrong-note-entry h4 { color: var(--cream); font-size: .95rem; margin: 0 0 8px; }
+.wrong-note-entry p, .wrong-note-entry li { color: var(--t2); font-size: .8rem; line-height: 1.6; }
+.wrong-note-entry strong { color: var(--text); }
+.wrong-note-entry ul { margin: 8px 0 0 18px; }
 
 @media (max-width: 900px) {
   .score-hero, .review-grid { grid-template-columns: 1fr; }

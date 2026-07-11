@@ -100,7 +100,7 @@ export default function Account() {
 
   function handleClearSR() {
     if (!confirm("Tekrar planı verilerini sıfırlamak istediğinizden emin misiniz?")) return;
-    const ns = { ...state, sr: {}, noteCount: 0 };
+    const ns = { ...state, sr: {}, noteCount: 0, personalNotes: [] };
     saveState(ns);
     toast.success("Tekrar planı sıfırlandı");
   }

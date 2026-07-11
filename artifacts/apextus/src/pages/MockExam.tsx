@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { addWrongToPersonalNotes } from "@/lib/personalNotes";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri, TUS_KLINIK_WEIGHTS } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, QuizQuestion } from "@/lib/firestore";
@@ -164,6 +165,7 @@ Cevap indeksi 0-4. ${needed} soru üret.`;
     else {
       newState.mistakes = { ...newState.mistakes };
       newState.mistakes[q.tags?.[0] || q.cat || "Genel"] = (newState.mistakes[q.tags?.[0] || q.cat || "Genel"] || 0) + 1;
+      Object.assign(newState, addWrongToPersonalNotes(newState, q, idx));
     }
     newState.byCat = { ...newState.byCat };
     const catKey = q.cat || "Genel";

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { addWrongToPersonalNotes } from "@/lib/personalNotes";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri } from "@/lib/data";
 import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
@@ -222,6 +223,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
       setWrongList((prev) => [...prev, { q, sel: idx }]);
       newState.mistakes = { ...newState.mistakes };
       newState.mistakes[q.tags?.[0] || q.cat || "Genel"] = (newState.mistakes[q.tags?.[0] || q.cat || "Genel"] || 0) + 1;
+      Object.assign(newState, addWrongToPersonalNotes(newState, q, idx));
     }
 
     const today = toDay();

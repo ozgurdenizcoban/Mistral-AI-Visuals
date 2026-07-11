@@ -15,6 +15,28 @@ export interface SREntry {
   _manual?: boolean;
 }
 
+export interface PersonalNoteEntry {
+  id: string;
+  date: string;
+  cat: string;
+  topic: string;
+  question: string;
+  selected: string;
+  correct: string;
+  noteHtml: string;
+}
+
+export interface PersonalNoteVolume {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  level: number;
+  studyCount: number;
+  nextDate?: string;
+  entries: PersonalNoteEntry[];
+}
+
 export interface AppState {
   total: number;
   correct: number;
@@ -26,6 +48,7 @@ export interface AppState {
   mistakes: Record<string, number>;
   seenQ: Record<string, boolean>;
   noteCount: number;
+  personalNotes: PersonalNoteVolume[];
   aiExplainCount: number;
   plan: "free" | "weekly" | "monthly";
   planExpiry?: string;
@@ -55,7 +78,7 @@ function emptyState(): AppState {
   return {
     total: 0, correct: 0, streak: 0, lastDate: "", byCat: {},
     sessions: [], sr: {}, mistakes: {}, seenQ: {}, noteCount: 0,
-    aiExplainCount: 0, plan: "free", planExpiry: "",
+    personalNotes: [], aiExplainCount: 0, plan: "free", planExpiry: "",
   };
 }
 
@@ -139,6 +162,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 : {},
               seenQ: { ...seenQ, ...(raw.seenQ as Record<string, boolean> || {}) },
               noteCount: typeof raw.noteCount === "number" ? raw.noteCount : 0,
+              personalNotes: Array.isArray(raw.personalNotes) ? raw.personalNotes as PersonalNoteVolume[] : [],
               aiExplainCount: typeof raw.aiExplainCount === "number" ? raw.aiExplainCount : 0,
               plan: (raw.plan as AppState["plan"]) || "free",
               planExpiry: (raw.planExpiry as string) || "",
