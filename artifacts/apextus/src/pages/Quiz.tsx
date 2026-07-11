@@ -204,7 +204,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
     }
   }
 
-  function handleSelect(idx: number) {
+  async function handleSelect(idx: number) {
     if (answered) return;
     stopTimer();
     setSelected(idx);
@@ -223,7 +223,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
       setWrongList((prev) => [...prev, { q, sel: idx }]);
       newState.mistakes = { ...newState.mistakes };
       newState.mistakes[q.tags?.[0] || q.cat || "Genel"] = (newState.mistakes[q.tags?.[0] || q.cat || "Genel"] || 0) + 1;
-      Object.assign(newState, addWrongToPersonalNotes(newState, q, idx));
+      Object.assign(newState, await addWrongToPersonalNotes(newState, q, idx));
     }
 
     const today = toDay();

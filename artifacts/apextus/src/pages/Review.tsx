@@ -39,7 +39,7 @@ export default function Review() {
     setPlanLoading(true);
     const noteSummary = personalNotes.map((note) => {
       const topics = note.entries.slice(-8).map((e) => `${e.topic}: ${e.question}`).join("\n");
-      return `${note.title} (${note.entries.length} hata, sonraki tekrar: ${note.nextDate || "bugun"})\n${topics}`;
+      return `${note.title} (${note.entries.length} hata, sonraki tekrar: ${note.nextDate || "bugun"})\nSon hata konulari:\n${topics}\nMevcut kisisel konu notundan ozet:\n${(note.contentHtml || "").replace(/<[^>]+>/g, " ").slice(0, 1800)}`;
     }).join("\n\n");
 
     const prompt = `Sen deneyimli bir TUS kocusun. Ogrenciye TUS tarihine kadar profesyonel, hedefe yonelik ve uygulanabilir plan hazirla.
@@ -53,16 +53,26 @@ Ogrencinin sadece yanlislarindan olusan kisisel notlari:
 ${noteSummary || "Henuz yanlis notu yok."}
 
 Kurallar:
-- Dogru yaptigi konulari plana sisirme; ana odak yanlis kaliplari olsun.
-- Plan TUS kocu gibi net olsun: gunluk bloklar, soru sayisi, tekrar zamani, kontrol kriteri.
-- Her hafta icin beklenen sonuc ve puan etkisi yaz.
+- Dogru yaptigi konulari plana sisirme; ana odak yanlis kaliplari ve deneme analizi olsun.
+- TUS calisma plani mantigi kullan: once zayif konu kapatma, sonra brans denemesi, sonra karma deneme, sonra son tekrar.
+- Plani fazlara bol: tani koyma fazi, eksik kapatma fazi, deneme/analiz fazi, son tekrar fazi.
+- Gunluk plan "80 soru coz" deyip gecmesin; blok blok yaz: konu notu, aktif hatirlama, hedefli soru, yanlis analizi, mini tekrar.
+- Calisan ogrenci gibi dusun: ${hoursPerDay} saatlik gunu gercekci bloklara bol.
+- Her fazda olculen metrikleri yaz: net artisi, hata tekrari, konu kapatma, deneme hizi.
+- Her 7 gunde bir deneme analizi ve plan revizyonu koy.
 - Yanlis notlari icin aralikli tekrar gunlerini kullan: bugun, 3 gun, 7 gun, 14 gun, 30 gun.
+- Puan vaadi kesin olmasin; beklenen etkiyi aralik olarak yaz.
 - Cikti sadece HTML olsun.
 
 HTML iskeleti:
 <h3>TUS Kocu Plani</h3>
 <p>...</p>
-<table><thead><tr><th>Donem</th><th>Odak</th><th>Gunluk is</th><th>Soru</th><th>Beklenen etki</th></tr></thead><tbody>...</tbody></table>
+<h4>1. Faz Haritasi</h4>
+<table><thead><tr><th>Faz</th><th>Sure</th><th>Odak</th><th>Olcum</th><th>Beklenen etki</th></tr></thead><tbody>...</tbody></table>
+<h4>2. Gunluk Blok Sablonu</h4>
+<table><thead><tr><th>Blok</th><th>Sure</th><th>Is</th><th>Cikti</th></tr></thead><tbody>...</tbody></table>
+<h4>3. Haftalik Revizyon</h4>
+<ul>...</ul>
 <div class="tip"><strong>Bu haftanin net hedefi:</strong> ...</div>`;
 
     try {
@@ -91,16 +101,7 @@ HTML iskeleti:
             <button className="btn btn-primary sm" onClick={() => markStudied(note.id)}>Tekrar ettim</button>
           </div>
         </div>
-        {isOpen && (
-          <div className="personal-note-body">
-            {note.entries.map((entry) => (
-              <article key={entry.id} className="wrong-note-entry">
-                <div className="entry-meta">{entry.date} · {entry.cat} · {entry.topic}</div>
-                <div dangerouslySetInnerHTML={{ __html: entry.noteHtml }} />
-              </article>
-            ))}
-          </div>
-        )}
+        {isOpen && <div className="personal-note-body ai-topic-note" dangerouslySetInnerHTML={{ __html: note.contentHtml || "<p>Bu not henuz hazirlaniyor.</p>" }} />}
       </div>
     );
   };

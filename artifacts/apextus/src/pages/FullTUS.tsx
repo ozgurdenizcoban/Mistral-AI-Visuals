@@ -236,7 +236,7 @@ export default function FullTUS() {
   }
 
   /* ---- quiz interactions ---- */
-  function handleSelect(idx: number) {
+  async function handleSelect(idx: number) {
     if (answered) return;
     setSelected(idx);
     setAnswered(true);
@@ -249,7 +249,7 @@ export default function FullTUS() {
     else {
       ns.mistakes = { ...ns.mistakes };
       ns.mistakes[q.tags?.[0] || q.cat || "Genel"] = (ns.mistakes[q.tags?.[0] || q.cat || "Genel"] || 0) + 1;
-      Object.assign(ns, addWrongToPersonalNotes(ns, q, idx));
+      Object.assign(ns, await addWrongToPersonalNotes(ns, q, idx));
     }
     ns.byCat = { ...ns.byCat };
     const ck = q.cat || "Genel";

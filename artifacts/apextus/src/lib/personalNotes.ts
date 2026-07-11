@@ -1,9 +1,11 @@
 import type { AppState, PersonalNoteEntry, PersonalNoteVolume } from "@/contexts/AppContext";
 import type { QuizQuestion } from "@/lib/firestore";
 import { SR_INTERVALS } from "@/lib/data";
+import { mistralText } from "@/lib/mistral";
 import { addDays, toDay } from "@/lib/utils";
 
-const MAX_ENTRIES_PER_VOLUME = 24;
+const MAX_ENTRIES_PER_VOLUME = 18;
+const MAX_NOTE_CHARS = 18000;
 
 function clean(value?: string) {
   return (value || "").replace(/\s+/g, " ").trim();
@@ -13,69 +15,131 @@ function optionLabel(index: number) {
   return ["A", "B", "C", "D", "E"][index] || "-";
 }
 
-function buildTeachingNote(q: QuizQuestion, selected: number): string {
-  const correctText = q.opts?.[q.ans] || "";
-  const selectedText = selected >= 0 ? q.opts?.[selected] || "" : "Bos";
-  const tag = q.tags?.[0] || q.cat || "Genel";
+function stripFence(html: string) {
+  return html.replace(/^```(?:html)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+}
 
+function fallbackLearningNote(q: QuizQuestion, selected: number) {
+  const topic = q.tags?.[0] || q.cat || "Genel";
   return [
-    `<h4>${tag}</h4>`,
-    `<p><strong>Hata kalibi:</strong> Bu soruda hedeflenen bilgi ${clean(q.soru)}</p>`,
-    `<p><strong>Dogru cevap:</strong> ${optionLabel(q.ans)} - ${clean(correctText)}</p>`,
-    `<p><strong>Secilen cevap:</strong> ${selected >= 0 ? `${optionLabel(selected)} - ${clean(selectedText)}` : "Bos birakildi"}</p>`,
-    `<p><strong>Ogrenilecek cekirdek bilgi:</strong> ${clean(q.exp) || "Bu konu icin temel mekanizma ve ayirici tani tekrar edilmeli."}</p>`,
-    `<ul>`,
-    `<li>Bir sonraki cozumde once ana ipucunu bul: vaka, laboratuvar, muayene veya mekanizma.</li>`,
-    `<li>Dogru secenegi ezberleme; neden diger seceneklerin elendigini kisa not olarak dusun.</li>`,
-    `<li>Bu basligi tekrar ederken 5 hedefli soru coz ve ayni hata tekrarliyor mu kontrol et.</li>`,
-    `</ul>`,
+    `<h3>${topic} - Kisisel Konu Notu</h3>`,
+    `<p>Bu not, yaptigin yanlisa gore olusturuldu. Ana hedef soruyu ezberlemek degil, ayni konudan gelen yeni bir TUS sorusunda ipucunu taniyabilmek.</p>`,
+    `<h4>Ogrenilecek cekirdek bilgi</h4>`,
+    `<p>${clean(q.exp) || clean(q.soru)}</p>`,
+    `<h4>TUS'ta nasil sorulur?</h4>`,
+    `<ul><li>Vaka metninde ayirici ipucunu bul.</li><li>Dogru cevabin mekanizmasini ve en yakin yanlis secenegi neden eleyecegini bil.</li><li>Bu basliktan 5 hedefli soru coz.</li></ul>`,
+    `<h4>Son hata</h4>`,
+    `<p>Secilen: ${optionLabel(selected)} | Dogru: ${optionLabel(q.ans)}</p>`,
   ].join("");
+}
+
+function makeEntry(q: QuizQuestion, selected: number): PersonalNoteEntry {
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    date: toDay(),
+    cat: q.cat || "Genel",
+    topic: q.tags?.[0] || q.cat || "Genel",
+    question: clean(q.soru),
+    selected: optionLabel(selected),
+    correct: optionLabel(q.ans),
+    noteHtml: "",
+  };
+}
+
+function shouldStartNewVolume(note?: PersonalNoteVolume) {
+  if (!note) return true;
+  return note.entries.length >= MAX_ENTRIES_PER_VOLUME || (note.contentHtml || "").length >= MAX_NOTE_CHARS;
+}
+
+function createVolume(index: number): PersonalNoteVolume {
+  const today = toDay();
+  return {
+    id: `wrong-note-${index}`,
+    title: `Kisisel Konu Notu ${index}`,
+    contentHtml: "",
+    createdAt: today,
+    updatedAt: today,
+    level: 0,
+    studyCount: 0,
+    nextDate: today,
+    entries: [],
+  };
+}
+
+async function buildAiLearningNote(previousHtml: string, q: QuizQuestion, selected: number, volumeTitle: string) {
+  const selectedText = selected >= 0 ? q.opts?.[selected] || "Bos" : "Bos";
+  const correctText = q.opts?.[q.ans] || "";
+  const topic = q.tags?.[0] || q.cat || "Genel";
+  const previous = previousHtml ? previousHtml.slice(-12000) : "";
+
+  const prompt = `Sen TUS'a hazirlanan bir ogrenci icin kisisel konu anlatimi hazirlayan uzman bir TUS hocasisin.
+Gorev: Ogrencinin yanlis yaptigi sorudan konuyu tespit et ve "yanlis defteri" degil, sifirdan ogreten konu notu yaz.
+
+Not basligi: ${volumeTitle}
+Ders: ${q.cat || "Genel"}
+Konu etiketi: ${topic}
+Soru vaka/metin: ${clean(q.vaka)}
+Soru: ${clean(q.soru)}
+Secenekler: ${(q.opts || []).map((o, i) => `${optionLabel(i)}) ${clean(o)}`).join(" | ")}
+Ogrencinin sectigi: ${optionLabel(selected)} - ${clean(selectedText)}
+Dogru cevap: ${optionLabel(q.ans)} - ${clean(correctText)}
+Mevcut aciklama: ${clean(q.exp)}
+
+Onceki kisisel konu notu:
+${previous || "Bu ciltte henuz konu notu yok."}
+
+Kurallar:
+- Cikti tek bir konu notu gibi aksin; soru soru liste tutma.
+- Ogrencinin hatasindan anlasilan bilgi eksigini hedefle.
+- Yeni bilgiyi onceki notla birlestir; tekrar eden basliklari sisirme.
+- TUS odakli olsun: klinik ipucu, mekanizma, ayirici tani, sik tuzak, akilda kalacak mini tablo.
+- En sonda "Aralikli tekrar sorulari" diye 5 aktif hatirlama sorusu ekle.
+- 10 sayfalik notu asmayacak kadar kompakt ama ogretici yaz.
+- Sadece HTML dondur. Markdown kullanma.
+
+HTML iskeleti:
+<h3>...</h3>
+<p>...</p>
+<h4>Sinavda yakalanacak ipucu</h4>
+<ul>...</ul>
+<h4>Konu anlatimi</h4>
+<p>...</p>
+<h4>Ayirici tani / tuzak tablo</h4>
+<table><thead><tr><th>Durum</th><th>Ipucu</th><th>TUS tuzagi</th></tr></thead><tbody>...</tbody></table>
+<h4>Aralikli tekrar sorulari</h4>
+<ol>...</ol>`;
+
+  return stripFence(await mistralText(prompt, 18000, 0.2));
 }
 
 export function getPersonalNotesDue(state: AppState, today = toDay()) {
   return (state.personalNotes || []).filter((note) => !note.nextDate || note.nextDate <= today);
 }
 
-export function getActivePersonalNote(state: AppState): PersonalNoteVolume | null {
-  const notes = state.personalNotes || [];
-  return notes[notes.length - 1] || null;
-}
-
-export function addWrongToPersonalNotes(state: AppState, q: QuizQuestion, selected: number): AppState {
+export async function addWrongToPersonalNotes(state: AppState, q: QuizQuestion, selected: number): Promise<AppState> {
   const notes = [...(state.personalNotes || [])];
-  const today = toDay();
   let active = notes[notes.length - 1];
-
-  if (!active || active.entries.length >= MAX_ENTRIES_PER_VOLUME) {
-    active = {
-      id: `wrong-note-${notes.length + 1}`,
-      title: `Kisisel Yanlis Notu ${notes.length + 1}`,
-      createdAt: today,
-      updatedAt: today,
-      level: 0,
-      studyCount: 0,
-      nextDate: today,
-      entries: [],
-    };
+  if (shouldStartNewVolume(active)) {
+    active = createVolume(notes.length + 1);
     notes.push(active);
   }
 
-  const entry: PersonalNoteEntry = {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    date: today,
-    cat: q.cat || "Genel",
-    topic: q.tags?.[0] || q.cat || "Genel",
-    question: clean(q.soru),
-    selected: optionLabel(selected),
-    correct: optionLabel(q.ans),
-    noteHtml: buildTeachingNote(q, selected),
-  };
+  const entry = makeEntry(q, selected);
+  let contentHtml = "";
+  try {
+    contentHtml = await buildAiLearningNote(active.contentHtml || "", q, selected, active.title);
+  } catch (_) {
+    contentHtml = active.contentHtml
+      ? `${active.contentHtml}<hr />${fallbackLearningNote(q, selected)}`
+      : fallbackLearningNote(q, selected);
+  }
 
   const updated: PersonalNoteVolume = {
     ...active,
-    updatedAt: today,
-    nextDate: today,
-    entries: [...active.entries, entry],
+    contentHtml,
+    updatedAt: toDay(),
+    nextDate: toDay(),
+    entries: [...active.entries, { ...entry, noteHtml: contentHtml }],
   };
   notes[notes.length - 1] = updated;
 

@@ -150,7 +150,7 @@ Cevap indeksi 0-4. ${needed} soru üret.`;
   }
 
   /* ---- quiz interactions ---- */
-  function handleSelect(idx: number) {
+  async function handleSelect(idx: number) {
     if (answered) return;
     setSelected(idx);
     setAnswered(true);
@@ -165,7 +165,7 @@ Cevap indeksi 0-4. ${needed} soru üret.`;
     else {
       newState.mistakes = { ...newState.mistakes };
       newState.mistakes[q.tags?.[0] || q.cat || "Genel"] = (newState.mistakes[q.tags?.[0] || q.cat || "Genel"] || 0) + 1;
-      Object.assign(newState, addWrongToPersonalNotes(newState, q, idx));
+      Object.assign(newState, await addWrongToPersonalNotes(newState, q, idx));
     }
     newState.byCat = { ...newState.byCat };
     const catKey = q.cat || "Genel";
