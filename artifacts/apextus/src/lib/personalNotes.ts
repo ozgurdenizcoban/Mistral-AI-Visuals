@@ -46,20 +46,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-function fallbackLearningNote(q: QuizQuestion, selected: number) {
-  const topic = q.tags?.[0] || q.cat || "Genel";
-  return [
-    `<h3>${topic} - Kisisel Konu Notu</h3>`,
-    `<p>Bu not, yaptigin yanlisa gore olusturuldu. Ana hedef soruyu ezberlemek degil, ayni konudan gelen yeni bir TUS sorusunda ipucunu taniyabilmek.</p>`,
-    `<h4>Ogrenilecek cekirdek bilgi</h4>`,
-    `<p>${clean(q.exp) || clean(q.soru)}</p>`,
-    `<h4>TUS'ta nasil sorulur?</h4>`,
-    `<ul><li>Vaka metninde ayirici ipucunu bul.</li><li>Dogru cevabin mekanizmasini ve en yakin yanlis secenegi neden eleyecegini bil.</li><li>Bu basliktan 5 hedefli soru coz.</li></ul>`,
-    `<h4>Son hata</h4>`,
-    `<p>Secilen: ${optionLabel(selected)} | Dogru: ${optionLabel(q.ans)}</p>`,
-  ].join("");
-}
-
 function makeEntry(q: QuizQuestion, selected: number): PersonalNoteEntry {
   const selectedText = selected >= 0 ? q.opts?.[selected] || "" : "";
   const correctText = q.opts?.[q.ans] || "";
@@ -194,36 +180,6 @@ ZORUNLU BOLUMLER:
   return stripFence(await withTimeout(mistralText(prompt, 11000, 0.16), AI_NOTE_TIMEOUT_MS, "Kisisel not hazirlama zaman asimi"));
 }
 
-function fallbackVolumeNote(note: PersonalNoteVolume) {
-  const grouped = note.entries.reduce<Record<string, PersonalNoteEntry[]>>((acc, entry) => {
-    const key = entry.topic || entry.cat || "Genel";
-    acc[key] = acc[key] || [];
-    acc[key].push(entry);
-    return acc;
-  }, {});
-
-  const blocks = Object.entries(grouped).map(([topic, entries]) => `
-    <h4>${topic}</h4>
-    <p>Bu baslikta ${entries.length} hata kaydi var. Once temel mekanizmayi oku, sonra ayni basliktan 5 hedefli soru coz.</p>
-    <ul>
-      ${entries.slice(-4).map((entry) => `<li>${entry.question} <strong>Dogru:</strong> ${entry.correct}</li>`).join("")}
-    </ul>
-  `).join("");
-
-  return `<h2>1. Kisisel Hata Yorumu</h2>
-  <p><strong>Kisisel calisma notu:</strong> Bu not, yanlis yaptigin basliklari ogrenmeye donusturmek icin hazirlandi. Once konu mantigini oku, sonra aktif hatirlama sorularini kapali sekilde cevapla.</p>
-  <h2>2. Konu Anlatimi</h2>
-  ${blocks}
-  <h2>3. TUS SPOTLARI</h2>
-  <div class="tip"><strong>TUS SPOT:</strong> Yanlis yaptigin basliklarda ayirt ettirici ipucunu bulmadan secenek eleme yapma.</div>
-  <h2>4. Yanlis Tuzaklari</h2>
-  <div class="warn"><strong>DIKKAT:</strong> Bu gecici nottur; daha iyi anlatim icin AI ile derinlestir dugmesini kullan.</div>
-  <h2>5. Aktif Hatirlama</h2>
-  <ol><li>Bu konularda en sik karistirdigin ipucu ne?</li><li>Dogru cevabi hangi bulguya gore sececeksin?</li><li>En yakin yanlis secenek neden elenir?</li><li>Bu basliktan 5 soru cozunce hata tekrar ediyor mu?</li><li>Bir cumlelik ana kuralin ne?</li></ol>
-  <h2>6. Pekistirme Odevleri</h2>
-  <p>Bu notu okuduktan sonra ayni basliklardan 10 hedefli soru coz; yanlis tekrar ederse notu yeniden AI ile derinlestir.</p>`;
-}
-
 export function getPersonalNotesDue(state: AppState, today = toDay()) {
   return (state.personalNotes || []).filter((note) => !note.nextDate || note.nextDate <= today);
 }
@@ -241,9 +197,7 @@ export async function addWrongToPersonalNotes(state: AppState, q: QuizQuestion, 
   try {
     contentHtml = await buildAiLearningNote(active.contentHtml || "", q, selected, active.title);
   } catch (_) {
-    contentHtml = active.contentHtml
-      ? `${active.contentHtml}<hr />${fallbackLearningNote(q, selected)}`
-      : fallbackLearningNote(q, selected);
+    contentHtml = active.contentHtml || "";
   }
 
   const updated: PersonalNoteVolume = {
@@ -268,7 +222,7 @@ export async function rebuildPersonalNoteVolume(state: AppState, noteId: string)
   try {
     contentHtml = await buildAiLearningNoteFromEntries(note);
   } catch (_) {
-    contentHtml = fallbackVolumeNote(note);
+    throw new Error("AI konu notu hazirlanamadi. Lutfen tekrar dene.");
   }
 
   notes[index] = {

@@ -104,6 +104,8 @@ HTML iskeleti:
     const isOpen = openNoteId === note.id;
     const lastEntry = note.entries[note.entries.length - 1];
     const hasContent = !!(note.contentHtml || "").trim();
+    const isOldFallback = /Bu baslikta|Bu gecici nottur|Dogru:/i.test(note.contentHtml || "");
+    const hasUsableContent = hasContent && !isOldFallback;
     const isPreparing = noteLoadingId === note.id;
     return (
       <div className="personal-note-card">
@@ -115,25 +117,25 @@ HTML iskeleti:
           </div>
           <div className="task-actions">
             <button className="btn btn-ghost sm" onClick={() => setOpenNoteId(isOpen ? null : note.id)}>{isOpen ? "Kapat" : "Notu ac"}</button>
-            {!hasContent && (
+            {!hasUsableContent && (
               <button className="btn btn-teal sm" onClick={() => rebuildNote(note.id)} disabled={isPreparing}>
-                {isPreparing ? "Hazirlaniyor..." : "Notu hemen hazirla"}
+                {isPreparing ? "Hazirlaniyor..." : "Normal konu notu olarak yaz"}
               </button>
             )}
-            {hasContent && (
+            {hasUsableContent && (
               <button className="btn btn-teal sm" onClick={() => rebuildNote(note.id)} disabled={isPreparing}>
-                {isPreparing ? "Yeniden yaziliyor..." : "AI ile derinlestir"}
+                {isPreparing ? "Yeniden yaziliyor..." : "Normal konu notu olarak yeniden yaz"}
               </button>
             )}
             <button className="btn btn-primary sm" onClick={() => markStudied(note.id)}>Tekrar ettim</button>
           </div>
         </div>
         {isOpen && (
-          hasContent
+          hasUsableContent
             ? <div className="personal-note-body nb ai-topic-note" dangerouslySetInnerHTML={{ __html: note.contentHtml }} />
             : <div className="personal-note-body ai-topic-note">
-                <h3>Bu not henuz konu anlatimina donusmedi</h3>
-                <p>Eski kayittan gelen yanlislar var ama konu notu govdesi bos. <strong>Notu hemen hazirla</strong> dugmesine bas; sistem bu yanlislardan sifirdan kisisel konu notu uretecek.</p>
+                <h3>Hataya ozel konu notu henuz hazir degil</h3>
+                <p>Bu ciltte yanlis kayitlari var; ancak ekrandaki eski icerik normal konu notu kalitesinde degil. <strong>Normal konu notu olarak yaz</strong> dugmesine bas; sistem yanlislarindan konuyu secip normal notlar sayfasindaki formatta sifirdan konu anlatimi hazirlayacak.</p>
               </div>
         )}
       </div>
