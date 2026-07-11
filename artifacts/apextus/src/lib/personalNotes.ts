@@ -6,6 +6,7 @@ import { addDays, toDay } from "@/lib/utils";
 
 const MAX_ENTRIES_PER_VOLUME = 18;
 const MAX_NOTE_CHARS = 18000;
+const AI_NOTE_TIMEOUT_MS = 45000;
 
 function clean(value?: string) {
   return (value || "").replace(/\s+/g, " ").trim();
@@ -17,6 +18,22 @@ function optionLabel(index: number) {
 
 function stripFence(html: string) {
   return html.replace(/^```(?:html)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(label)), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function fallbackLearningNote(q: QuizQuestion, selected: number) {
@@ -109,7 +126,62 @@ HTML iskeleti:
 <h4>Aralikli tekrar sorulari</h4>
 <ol>...</ol>`;
 
-  return stripFence(await mistralText(prompt, 18000, 0.2));
+  return stripFence(await withTimeout(mistralText(prompt, 9000, 0.2), AI_NOTE_TIMEOUT_MS, "Kisisel not hazirlama zaman asimi"));
+}
+
+async function buildAiLearningNoteFromEntries(note: PersonalNoteVolume) {
+  const history = note.entries.slice(-12).map((entry, index) =>
+    `${index + 1}. Ders: ${entry.cat} | Konu: ${entry.topic} | Soru: ${entry.question} | Secilen: ${entry.selected} | Dogru: ${entry.correct}`
+  ).join("\n");
+
+  const prompt = `Sen TUS'a hazirlanan bir ogrenci icin kisisel konu anlatimi hazirlayan uzman bir TUS hocasisin.
+Asagidaki yanlis kayitlarindan ortak eksik konulari cikar ve sifirdan ogreten tek bir konu notu hazirla.
+Bu bir yanlis listesi olmayacak; ogrencinin tekrar edip ogrenebilecegi sinav odakli konu anlatimi olacak.
+
+Not basligi: ${note.title}
+Yanlis kayitlari:
+${history || "Kayit yok."}
+
+Kurallar:
+- Soru soru liste tutma.
+- Ortak eksik bilgi kaliplarini birlestir.
+- TUS odakli anlat: mekanizma, klinik ipucu, ayirici tani, tuzak, mini tablo.
+- En sona 5 aktif hatirlama sorusu ekle.
+- Sadece HTML dondur.
+
+<h3>...</h3>
+<p>...</p>
+<h4>Konu anlatimi</h4>
+<p>...</p>
+<h4>TUS ipuclari ve tuzaklar</h4>
+<table><thead><tr><th>Ipucu</th><th>Anlami</th><th>Tuzak</th></tr></thead><tbody>...</tbody></table>
+<h4>Aralikli tekrar sorulari</h4>
+<ol>...</ol>`;
+
+  return stripFence(await withTimeout(mistralText(prompt, 9000, 0.2), AI_NOTE_TIMEOUT_MS, "Kisisel not hazirlama zaman asimi"));
+}
+
+function fallbackVolumeNote(note: PersonalNoteVolume) {
+  const grouped = note.entries.reduce<Record<string, PersonalNoteEntry[]>>((acc, entry) => {
+    const key = entry.topic || entry.cat || "Genel";
+    acc[key] = acc[key] || [];
+    acc[key].push(entry);
+    return acc;
+  }, {});
+
+  const blocks = Object.entries(grouped).map(([topic, entries]) => `
+    <h4>${topic}</h4>
+    <p>Bu baslikta ${entries.length} hata kaydi var. Once temel mekanizmayi oku, sonra ayni basliktan 5 hedefli soru coz.</p>
+    <ul>
+      ${entries.slice(-4).map((entry) => `<li>${entry.question} <strong>Dogru:</strong> ${entry.correct}</li>`).join("")}
+    </ul>
+  `).join("");
+
+  return `<h3>${note.title}</h3>
+  <p>AI notu zamaninda tamamlanamadigi icin gecici konu notu olusturuldu. Bu not yine yanlis yaptigin konulari tekrar etmeye yoneliktir.</p>
+  ${blocks}
+  <h4>Aralikli tekrar sorulari</h4>
+  <ol><li>Bu konularda en sik karistirdigin ipucu ne?</li><li>Dogru cevabi hangi bulguya gore sececeksin?</li><li>En yakin yanlis secenek neden elenir?</li><li>Bu basliktan 5 soru cozunce hata tekrar ediyor mu?</li><li>Bir cumlelik ana kuralin ne?</li></ol>`;
 }
 
 export function getPersonalNotesDue(state: AppState, today = toDay()) {
@@ -143,6 +215,28 @@ export async function addWrongToPersonalNotes(state: AppState, q: QuizQuestion, 
   };
   notes[notes.length - 1] = updated;
 
+  return { ...state, personalNotes: notes };
+}
+
+export async function rebuildPersonalNoteVolume(state: AppState, noteId: string): Promise<AppState> {
+  const notes = [...(state.personalNotes || [])];
+  const index = notes.findIndex((note) => note.id === noteId);
+  if (index < 0) return state;
+
+  const note = notes[index];
+  let contentHtml = "";
+  try {
+    contentHtml = await buildAiLearningNoteFromEntries(note);
+  } catch (_) {
+    contentHtml = fallbackVolumeNote(note);
+  }
+
+  notes[index] = {
+    ...note,
+    contentHtml,
+    updatedAt: toDay(),
+    nextDate: toDay(),
+  };
   return { ...state, personalNotes: notes };
 }
 

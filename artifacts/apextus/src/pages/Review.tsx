@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { mistralText } from "@/lib/mistral";
-import { getPersonalNotesDue, markPersonalNoteStudied } from "@/lib/personalNotes";
+import { getPersonalNotesDue, markPersonalNoteStudied, rebuildPersonalNoteVolume } from "@/lib/personalNotes";
 import { getScoreSimulation } from "@/lib/studyInsights";
 import { toDay } from "@/lib/utils";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ export default function Review() {
   const [hoursPerDay, setHoursPerDay] = useState(4);
   const [targetScore, setTargetScore] = useState(65);
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  const [noteLoadingId, setNoteLoadingId] = useState<string | null>(null);
 
   const today = toDay();
   const personalNotes = state.personalNotes || [];
@@ -33,6 +34,20 @@ export default function Review() {
   function markStudied(noteId: string) {
     saveState(markPersonalNoteStudied(state, noteId));
     toast.success("Kisisel not tekrar tarihi guncellendi");
+  }
+
+  async function rebuildNote(noteId: string) {
+    setNoteLoadingId(noteId);
+    try {
+      const next = await rebuildPersonalNoteVolume(state, noteId);
+      saveState(next);
+      setOpenNoteId(noteId);
+      toast.success("Kisisel konu notu hazirlandi");
+    } catch (e) {
+      toast.error("Not hazirlanamadi: " + (e as Error).message);
+    } finally {
+      setNoteLoadingId(null);
+    }
   }
 
   async function generatePlan() {
@@ -88,6 +103,8 @@ HTML iskeleti:
   const NoteCard = ({ note }: { note: typeof personalNotes[number] }) => {
     const isOpen = openNoteId === note.id;
     const lastEntry = note.entries[note.entries.length - 1];
+    const hasContent = !!(note.contentHtml || "").trim();
+    const isPreparing = noteLoadingId === note.id;
     return (
       <div className="personal-note-card">
         <div className="personal-note-top">
@@ -98,10 +115,22 @@ HTML iskeleti:
           </div>
           <div className="task-actions">
             <button className="btn btn-ghost sm" onClick={() => setOpenNoteId(isOpen ? null : note.id)}>{isOpen ? "Kapat" : "Notu ac"}</button>
+            {!hasContent && (
+              <button className="btn btn-teal sm" onClick={() => rebuildNote(note.id)} disabled={isPreparing}>
+                {isPreparing ? "Hazirlaniyor..." : "Notu hemen hazirla"}
+              </button>
+            )}
             <button className="btn btn-primary sm" onClick={() => markStudied(note.id)}>Tekrar ettim</button>
           </div>
         </div>
-        {isOpen && <div className="personal-note-body ai-topic-note" dangerouslySetInnerHTML={{ __html: note.contentHtml || "<p>Bu not henuz hazirlaniyor.</p>" }} />}
+        {isOpen && (
+          hasContent
+            ? <div className="personal-note-body ai-topic-note" dangerouslySetInnerHTML={{ __html: note.contentHtml }} />
+            : <div className="personal-note-body ai-topic-note">
+                <h3>Bu not henuz konu anlatimina donusmedi</h3>
+                <p>Eski kayittan gelen yanlislar var ama konu notu govdesi bos. <strong>Notu hemen hazirla</strong> dugmesine bas; sistem bu yanlislardan sifirdan kisisel konu notu uretecek.</p>
+              </div>
+        )}
       </div>
     );
   };
