@@ -541,13 +541,13 @@ body {
   color: var(--t2);
   line-height: 1.7;
 }
-.ai-topic-note h3 { color: var(--cream); font-family: "Playfair Display", serif; font-size: 1.35rem; margin: 0 0 10px; }
-.ai-topic-note h4 { color: var(--teal); font-size: .95rem; margin: 18px 0 8px; }
-.ai-topic-note p, .ai-topic-note li { color: var(--t2); font-size: .84rem; }
+.ai-topic-note:not(.nb) h3 { color: var(--cream); font-family: "Playfair Display", serif; font-size: 1.35rem; margin: 0 0 10px; }
+.ai-topic-note:not(.nb) h4 { color: var(--teal); font-size: .95rem; margin: 18px 0 8px; }
+.ai-topic-note:not(.nb) p, .ai-topic-note:not(.nb) li { color: var(--t2); font-size: .84rem; }
 .ai-topic-note strong { color: var(--text); }
-.ai-topic-note table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: .78rem; }
-.ai-topic-note th, .ai-topic-note td { border: 1px solid var(--line); padding: 8px; vertical-align: top; }
-.ai-topic-note th { color: var(--cream); background: rgba(255,255,255,.04); }
+.ai-topic-note:not(.nb) table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: .78rem; }
+.ai-topic-note:not(.nb) th, .ai-topic-note:not(.nb) td { border: 1px solid var(--line); padding: 8px; vertical-align: top; }
+.ai-topic-note:not(.nb) th { color: var(--cream); background: rgba(255,255,255,.04); }
 
 @media (max-width: 900px) {
   .score-hero, .review-grid { grid-template-columns: 1fr; }

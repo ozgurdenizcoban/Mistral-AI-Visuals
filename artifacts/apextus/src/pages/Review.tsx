@@ -130,7 +130,7 @@ HTML iskeleti:
         </div>
         {isOpen && (
           hasContent
-            ? <div className="personal-note-body ai-topic-note" dangerouslySetInnerHTML={{ __html: note.contentHtml }} />
+            ? <div className="personal-note-body nb ai-topic-note" dangerouslySetInnerHTML={{ __html: note.contentHtml }} />
             : <div className="personal-note-body ai-topic-note">
                 <h3>Bu not henuz konu anlatimina donusmedi</h3>
                 <p>Eski kayittan gelen yanlislar var ama konu notu govdesi bos. <strong>Notu hemen hazirla</strong> dugmesine bas; sistem bu yanlislardan sifirdan kisisel konu notu uretecek.</p>
