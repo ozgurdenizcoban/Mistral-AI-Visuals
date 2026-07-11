@@ -6,13 +6,6 @@ export interface TusScoreSection {
   q: number;
 }
 
-export interface SpecialtyBenchmark {
-  branch: string;
-  min: number;
-  max?: number;
-  competitiveness: "çok yüksek" | "yüksek" | "orta" | "erişilebilir";
-}
-
 export interface TusProgram {
   code: string;
   institution: string;
@@ -26,9 +19,36 @@ export interface TusProgram {
 }
 
 export type PlacementStatus = "guclu" | "sinirda" | "yakin" | "uzak" | "bos";
+export type TusScoreType = "K" | "T";
+
+export interface TusScoreEstimate {
+  temelNet: number;
+  klinikNet: number;
+  temelStandart: number;
+  klinikStandart: number;
+  agirlikliK: number;
+  agirlikliT: number;
+  kPuan: number;
+  tPuan: number;
+}
+
+interface TusNorms {
+  temelMean: number;
+  temelSd: number;
+  klinikMean: number;
+  klinikSd: number;
+  weightedMean: number;
+  weightedSd: number;
+  weightedMax: number;
+}
 
 export const TUS_SCORE_SOURCE = {
-  label: "ÖSYM 2025-TUS 2. Dönem en küçük/en büyük puanlar",
+  label: "OSYM 2026-TUS 1. Donem Basvuru Kilavuzu",
+  url: "https://dokuman.osym.gov.tr/pdfdokuman/2026/TUSDONEM-1/kilavuz_tsd1d28012026.pdf",
+};
+
+export const TUS_PLACEMENT_SOURCE = {
+  label: "OSYM 2025-TUS 2. Donem en kucuk/en buyuk puanlar",
   url: "https://www.osym.gov.tr/TR,33551/2025-tus-2-donem-yerlestirme-sonuclarina-iliskin-sayisal-bilgiler.html",
 };
 
@@ -47,36 +67,16 @@ export const TUS_SECTIONS: TusScoreSection[] = [
   { label: "Kucuk Stajlar", group: "Klinik", q: 22 },
 ];
 
-// Branch-level quick orientation; institution-level checks use TUS_PROGRAMS below.
-export const SPECIALTY_BENCHMARKS: SpecialtyBenchmark[] = [
-  { branch: "Deri ve Zührevi Hastalıkları", min: 71.5, competitiveness: "çok yüksek" },
-  { branch: "Plastik, Rekonstrüktif ve Estetik Cerrahi", min: 70.8, competitiveness: "çok yüksek" },
-  { branch: "Radyoloji", min: 69.8, competitiveness: "çok yüksek" },
-  { branch: "Göz Hastalıkları", min: 68.9, competitiveness: "çok yüksek" },
-  { branch: "Kulak Burun Boğaz Hastalıkları", min: 67.8, competitiveness: "yüksek" },
-  { branch: "Çocuk ve Ergen Ruh Sağlığı", min: 67.2, competitiveness: "yüksek" },
-  { branch: "Kardiyoloji", min: 65.8, competitiveness: "yüksek" },
-  { branch: "Fiziksel Tıp ve Rehabilitasyon", min: 64.5, competitiveness: "yüksek" },
-  { branch: "Anesteziyoloji ve Reanimasyon", min: 63.2, competitiveness: "yüksek" },
-  { branch: "Nöroloji", min: 62.8, competitiveness: "yüksek" },
-  { branch: "Psikiyatri", min: 61.9, competitiveness: "orta" },
-  { branch: "Ortopedi ve Travmatoloji", min: 61.3, competitiveness: "orta" },
-  { branch: "Üroloji", min: 60.8, competitiveness: "orta" },
-  { branch: "Çocuk Sağlığı ve Hastalıkları", min: 59.5, competitiveness: "orta" },
-  { branch: "İç Hastalıkları", min: 58.4, competitiveness: "orta" },
-  { branch: "Kadın Hastalıkları ve Doğum", min: 57.6, competitiveness: "orta" },
-  { branch: "Genel Cerrahi", min: 56.8, competitiveness: "orta" },
-  { branch: "Göğüs Hastalıkları", min: 55.7, competitiveness: "erişilebilir" },
-  { branch: "Acil Tıp", min: 54.2, competitiveness: "erişilebilir" },
-  { branch: "Enfeksiyon Hastalıkları", min: 53.8, competitiveness: "erişilebilir" },
-  { branch: "Halk Sağlığı", min: 52.6, competitiveness: "erişilebilir" },
-  { branch: "Aile Hekimliği", min: 50.2, competitiveness: "erişilebilir" },
-  { branch: "Anatomi", min: 48.8, competitiveness: "erişilebilir" },
-  { branch: "Tıbbi Biyokimya", min: 48.2, competitiveness: "erişilebilir" },
-  { branch: "Tıbbi Mikrobiyoloji", min: 47.8, competitiveness: "erişilebilir" },
-  { branch: "Patoloji", min: 47.5, competitiveness: "erişilebilir" },
-  { branch: "Fizyoloji", min: 46.8, competitiveness: "erişilebilir" },
-];
+// Exact OSYM score needs exam-period cohort values. These defaults make an honest estimate.
+export const TUS_ESTIMATE_DEFAULTS: TusNorms = {
+  temelMean: 42,
+  temelSd: 16,
+  klinikMean: 43,
+  klinikSd: 16,
+  weightedMean: 50,
+  weightedSd: 8,
+  weightedMax: 86,
+};
 
 export function netScore(correct: number, wrong: number) {
   return correct - wrong / 4;
@@ -86,29 +86,50 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-export function calcTusPuan(temelNet: number, klinikNet: number): number {
+function round1(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
+function toStandardScore(net: number, mean: number, sd: number) {
+  return round1(50 + 10 * (net - mean) / sd);
+}
+
+function toOfficialExamScore(weightedScore: number, norms: TusNorms = TUS_ESTIMATE_DEFAULTS) {
+  // 2026 OSYM guide: 55 + 30 * [7(AP-X)-S] / [7(EBAP-X)-S]
+  const denominator = 7 * (norms.weightedMax - norms.weightedMean) - norms.weightedSd;
+  if (denominator <= 0) return clamp(round1(weightedScore), 0, 85);
+  return clamp(round1(55 + 30 * (7 * (weightedScore - norms.weightedMean) - norms.weightedSd) / denominator), 0, 85);
+}
+
+export function calcTusScores(temelNet: number, klinikNet: number, norms: TusNorms = TUS_ESTIMATE_DEFAULTS): TusScoreEstimate {
   const safeTemelNet = clamp(temelNet, -25, 100);
   const safeKlinikNet = clamp(klinikNet, -25, 100);
-  const spTemel = 50 + 10 * (safeTemelNet - 42) / 16;
-  const spKlinik = 50 + 10 * (safeKlinikNet - 43) / 16;
-  const puan = 0.4 * spTemel + 0.6 * spKlinik;
-  return Math.max(0, Math.min(100, Math.round(puan * 10) / 10));
+  const temelStandart = toStandardScore(safeTemelNet, norms.temelMean, norms.temelSd);
+  const klinikStandart = toStandardScore(safeKlinikNet, norms.klinikMean, norms.klinikSd);
+  const agirlikliK = round1(0.4 * temelStandart + 0.6 * klinikStandart);
+  const agirlikliT = round1(0.6 * temelStandart + 0.4 * klinikStandart);
+  return {
+    temelNet: safeTemelNet,
+    klinikNet: safeKlinikNet,
+    temelStandart,
+    klinikStandart,
+    agirlikliK,
+    agirlikliT,
+    kPuan: toOfficialExamScore(agirlikliK, norms),
+    tPuan: toOfficialExamScore(agirlikliT, norms),
+  };
+}
+
+export function calcTusPuan(temelNet: number, klinikNet: number) {
+  return calcTusScores(temelNet, klinikNet).kPuan;
 }
 
 export function calcSpTemel(net: number) {
-  return Math.max(0, Math.min(100, Math.round((50 + 10 * (clamp(net, -25, 100) - 42) / 16) * 10) / 10));
+  return toStandardScore(clamp(net, -25, 100), TUS_ESTIMATE_DEFAULTS.temelMean, TUS_ESTIMATE_DEFAULTS.temelSd);
 }
 
 export function calcSpKlinik(net: number) {
-  return Math.max(0, Math.min(100, Math.round((50 + 10 * (clamp(net, -25, 100) - 43) / 16) * 10) / 10));
-}
-
-export function getPlacementMatches(score: number) {
-  return SPECIALTY_BENCHMARKS.map((item) => {
-    const diff = Math.round((score - item.min) * 10) / 10;
-    const status: PlacementStatus = diff >= 2 ? "guclu" : diff >= 0 ? "sinirda" : diff >= -3 ? "yakin" : "uzak";
-    return { ...item, diff, status };
-  }).sort((a, b) => b.min - a.min);
+  return toStandardScore(clamp(net, -25, 100), TUS_ESTIMATE_DEFAULTS.klinikMean, TUS_ESTIMATE_DEFAULTS.klinikSd);
 }
 
 function normalizeSearch(value: string) {
@@ -136,28 +157,39 @@ function expandQuery(query: string) {
     .replace(/\bgoz\b/g, "goz hastaliklari");
 }
 
-export function getProgramStatus(score: number, program: TusProgram): PlacementStatus {
+export function getProgramScoreType(program: TusProgram): TusScoreType {
+  const specialty = normalizeSearch(program.specialty);
+  const basicKeywords = ["anatomi", "histoloji", "embriyoloji", "fizyoloji", "biyokimya", "mikrobiyoloji", "patoloji", "farmakoloji"];
+  return basicKeywords.some((keyword) => specialty.includes(keyword)) ? "T" : "K";
+}
+
+function getComparableScore(score: number | { kPuan: number; tPuan: number }, program: TusProgram) {
+  if (typeof score === "number") return score;
+  return getProgramScoreType(program) === "T" ? score.tPuan : score.kPuan;
+}
+
+export function getProgramStatus(score: number | { kPuan: number; tPuan: number }, program: TusProgram): PlacementStatus {
   if (program.minScore === null) return program.empty > 0 ? "bos" : "uzak";
-  const diff = score - program.minScore;
+  const diff = getComparableScore(score, program) - program.minScore;
   if (diff >= 1.5) return "guclu";
   if (diff >= 0) return "sinirda";
   if (diff >= -2.5) return "yakin";
   return "uzak";
 }
 
-export function getProgramMessage(score: number, program: TusProgram) {
+export function getProgramMessage(score: number | { kPuan: number; tPuan: number }, program: TusProgram) {
   const status = getProgramStatus(score, program);
-  if (status === "bos") return "Son yerleştirmede boş kalmış; taban puan oluşmamış.";
-  if (program.minScore === null) return "Bu program için karşılaştırılabilir taban puan yok.";
+  if (status === "bos") return "Son yerlestirmede bos kalmis; taban puan olusmamis.";
+  if (program.minScore === null) return "Bu program icin karsilastirilabilir taban puan yok.";
 
-  const diff = Math.round((score - program.minScore) * 10) / 10;
-  if (status === "guclu") return `Geçen yerleştirmeye göre ${diff.toFixed(1)} puan üstündesin.`;
-  if (status === "sinirda") return `Taban puanın ${diff.toFixed(1)} puan üstünde; sınırda ama mümkün.`;
-  if (status === "yakin") return `${Math.abs(diff).toFixed(1)} puan eksik; yakın hedef.`;
-  return `${Math.abs(diff).toFixed(1)} puan eksik; şu an uzak hedef.`;
+  const diff = round1(getComparableScore(score, program) - program.minScore);
+  if (status === "guclu") return `Gecen yerlestirmeye gore ${diff.toFixed(1)} puan ustundesin.`;
+  if (status === "sinirda") return `Taban puanin ${diff.toFixed(1)} puan ustunde; sinirda ama mumkun.`;
+  if (status === "yakin") return `${Math.abs(diff).toFixed(1)} puan eksik; yakin hedef.`;
+  return `${Math.abs(diff).toFixed(1)} puan eksik; su an uzak hedef.`;
 }
 
-export function searchTusPrograms(query: string, score: number, limit = 12) {
+export function searchTusPrograms(query: string, score: number | { kPuan: number; tPuan: number }, limit = 12) {
   const normalized = expandQuery(query);
   const tokens = normalized.split(" ").filter(Boolean);
   const programs = tokens.length > 0
@@ -165,14 +197,16 @@ export function searchTusPrograms(query: string, score: number, limit = 12) {
         const text = normalizeSearch(`${program.institution} ${program.specialty} ${program.city} ${program.code}`);
         return tokens.every((token) => text.includes(token));
       })
-    : TUS_PROGRAMS.filter((program) => program.minScore !== null && program.minScore <= score + 2.5);
+    : TUS_PROGRAMS.filter((program) => program.minScore !== null && program.minScore <= getComparableScore(score, program) + 2.5);
 
   return programs
     .map((program) => ({
       ...program,
+      scoreType: getProgramScoreType(program),
+      usedScore: getComparableScore(score, program),
       status: getProgramStatus(score, program),
       message: getProgramMessage(score, program),
-      diff: program.minScore === null ? null : Math.round((score - program.minScore) * 10) / 10,
+      diff: program.minScore === null ? null : round1(getComparableScore(score, program) - program.minScore),
     }))
     .sort((a, b) => {
       const aScore = a.minScore ?? -1;

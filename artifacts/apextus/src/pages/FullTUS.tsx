@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { mistralJSON, parseJSON } from "@/lib/mistral";
 import { fbGetQuestions, fbSaveQuestions, QuizQuestion } from "@/lib/firestore";
-import { searchTusPrograms, TUS_SCORE_SOURCE } from "@/lib/tusData";
+import { calcTusScores, searchTusPrograms, TUS_PLACEMENT_SOURCE } from "@/lib/tusData";
 import { toDay, prevDay } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -54,14 +54,6 @@ const SCALE_OPTIONS: { label: string; val: Scale; desc: string }[] = [
   { val: 200, label: "Tam TUS", desc: "~200 soru - ~60 dk uretim" },
 ];
 
-/* TUS puan hesabi (TusScore ile ayni formul) */
-const TB_MEAN = 42; const TB_SD = 16;
-const KB_MEAN = 43; const KB_SD = 16;
-function tusPuanCalc(tNet: number, kNet: number) {
-  const spt = 50 + 10 * (tNet - TB_MEAN) / TB_SD;
-  const spk = 50 + 10 * (kNet - KB_MEAN) / KB_SD;
-  return Math.max(0, Math.min(100, Math.round((0.4 * spt + 0.6 * spk) * 10) / 10));
-}
 function netScore(c: number, w: number) { return c - w / 4; }
 
 function puanColor(p: number) {
@@ -291,8 +283,8 @@ export default function FullTUS() {
   /* Normalize nets to 200-question equivalent for TUS puan */
   const temelNet200  = temelTotal  > 0 ? Math.round((temelNet  / temelTotal)  * 100 * 10) / 10 : 0;
   const klinikNet200 = klinikTotal > 0 ? Math.round((klinikNet / klinikTotal) * 100 * 10) / 10 : 0;
-  const tusPuan = tusPuanCalc(temelNet200, klinikNet200);
-  const mainColor = puanColor(tusPuan);
+  const tusScores = calcTusScores(temelNet200, klinikNet200);
+  const mainColor = puanColor(tusScores.kPuan);
 
   /* ================================================================ SETUP */
   if (phase === "setup") {
@@ -540,8 +532,8 @@ export default function FullTUS() {
   /* =============================================================== RESULT */
   if (phase === "result") {
     const overallPct = answers.length > 0 ? Math.round((totalCorrect / answers.length) * 100) : 0;
-    const barPct = Math.max(0, Math.min(100, Math.round(((tusPuan - 40) / 40) * 100)));
-    const placementMatches = searchTusPrograms(placementQuery, tusPuan, placementQuery.trim() ? 12 : 8);
+    const barPct = Math.max(0, Math.min(100, Math.round(((tusScores.kPuan - 40) / 40) * 100)));
+    const placementMatches = searchTusPrograms(placementQuery, tusScores, placementQuery.trim() ? 12 : 8);
 
     /* Per-category */
     const catMap: Record<string, { correct: number; total: number; group: "temel" | "klinik"; icon: string }> = {};
@@ -562,11 +554,11 @@ export default function FullTUS() {
 
         {/* Main score cards */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
-          {/* TUS puan */}
+          {/* K puan */}
           <div className="card" style={{ padding: 20, textAlign: "center", gridColumn: "span 1" }}>
-            <div style={{ fontSize: ".62rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>Tahmini TUS Puanı</div>
-            <div style={{ fontSize: "3rem", fontWeight: 900, fontFamily: "Playfair Display, serif", color: mainColor, lineHeight: 1 }}>{tusPuan.toFixed(1)}</div>
-            <div style={{ fontSize: ".65rem", color: "var(--t3)", marginTop: 4 }}>/ 100</div>
+            <div style={{ fontSize: ".62rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>Tahmini K Puani</div>
+            <div style={{ fontSize: "3rem", fontWeight: 900, fontFamily: "Playfair Display, serif", color: mainColor, lineHeight: 1 }}>{tusScores.kPuan.toFixed(1)}</div>
+            <div style={{ fontSize: ".65rem", color: "var(--t3)", marginTop: 4 }}>Klinik agirlikli</div>
             <div style={{ marginTop: 12 }}>
               <div className="progress-bar" style={{ height: 7, borderRadius: 4 }}>
                 <div className="progress-fill" style={{ width: `${barPct}%`, background: mainColor, transition: "width .8s" }} />
@@ -577,14 +569,14 @@ export default function FullTUS() {
             </div>
           </div>
 
-          {/* Temel */}
+          {/* T puan */}
           <div className="card" style={{ padding: 20, textAlign: "center" }}>
-            <div style={{ fontSize: ".62rem", fontWeight: 800, color: "var(--gold)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 8 }}>Temel Bilimler</div>
+            <div style={{ fontSize: ".62rem", fontWeight: 800, color: "var(--gold)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 8 }}>Tahmini T Puani</div>
             <div style={{ fontSize: "2.2rem", fontWeight: 900, fontFamily: "Playfair Display, serif", color: pctColor(temelTotal > 0 ? Math.round(temelCorrect / temelTotal * 100) : 0), lineHeight: 1 }}>
-              {temelTotal > 0 ? Math.round(temelCorrect / temelTotal * 100) : 0}<span style={{ fontSize: "1rem" }}>%</span>
+              {tusScores.tPuan.toFixed(1)}
             </div>
-            <div style={{ fontSize: ".7rem", color: "var(--t2)", marginTop: 6 }}>{temelCorrect}/{temelTotal} · net {Math.max(0, temelNet)}</div>
-            <div style={{ fontSize: ".62rem", color: "var(--t3)", marginTop: 3 }}>SP: {(50 + 10 * (temelNet200 - TB_MEAN) / TB_SD).toFixed(1)}</div>
+            <div style={{ fontSize: ".7rem", color: "var(--t2)", marginTop: 6 }}>{temelCorrect}/{temelTotal} - net {Math.max(0, temelNet)}</div>
+            <div style={{ fontSize: ".62rem", color: "var(--t3)", marginTop: 3 }}>TTBT SP: {tusScores.temelStandart.toFixed(1)}</div>
           </div>
 
           {/* Klinik */}
@@ -593,8 +585,8 @@ export default function FullTUS() {
             <div style={{ fontSize: "2.2rem", fontWeight: 900, fontFamily: "Playfair Display, serif", color: pctColor(klinikTotal > 0 ? Math.round(klinikCorrect / klinikTotal * 100) : 0), lineHeight: 1 }}>
               {klinikTotal > 0 ? Math.round(klinikCorrect / klinikTotal * 100) : 0}<span style={{ fontSize: "1rem" }}>%</span>
             </div>
-            <div style={{ fontSize: ".7rem", color: "var(--t2)", marginTop: 6 }}>{klinikCorrect}/{klinikTotal} · net {Math.max(0, klinikNet)}</div>
-            <div style={{ fontSize: ".62rem", color: "var(--t3)", marginTop: 3 }}>SP: {(50 + 10 * (klinikNet200 - KB_MEAN) / KB_SD).toFixed(1)}</div>
+            <div style={{ fontSize: ".7rem", color: "var(--t2)", marginTop: 6 }}>{klinikCorrect}/{klinikTotal} - net {Math.max(0, klinikNet)}</div>
+            <div style={{ fontSize: ".62rem", color: "var(--t3)", marginTop: 3 }}>KTBT SP: {tusScores.klinikStandart.toFixed(1)}</div>
           </div>
         </div>
 
@@ -604,7 +596,7 @@ export default function FullTUS() {
               <div className="eyebrow">Nereye yerlesebilirim?</div>
               <h2>Kurum ve bolum kontrolu</h2>
             </div>
-            <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer" style={{ color: "var(--t3)", fontSize: ".7rem" }}>OSYM verisi</a>
+            <a href={TUS_PLACEMENT_SOURCE.url} target="_blank" rel="noreferrer" style={{ color: "var(--t3)", fontSize: ".7rem" }}>OSYM taban puan</a>
           </div>
           <div className="placement-search">
             <input
@@ -625,7 +617,7 @@ export default function FullTUS() {
                 <div>
                   <b>{item.minScore === null ? "Bos" : item.minScore.toFixed(2)}</b>
                   <em>{placementStatusLabel(item.status)}</em>
-                  <small>{item.placed}/{item.quota} yerlesen</small>
+                  <small>{item.scoreType} puani - {item.placed}/{item.quota}</small>
                 </div>
               </div>
             ))}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
-import { calcSpKlinik, calcSpTemel, calcTusPuan, netScore, searchTusPrograms, TUS_SCORE_SOURCE, TUS_SECTIONS } from "@/lib/tusData";
+import { calcTusScores, netScore, searchTusPrograms, TUS_PLACEMENT_SOURCE, TUS_SCORE_SOURCE, TUS_SECTIONS } from "@/lib/tusData";
 
 function pctColor(pct: number) {
   if (pct >= 75) return "var(--green)";
@@ -21,10 +21,10 @@ function statusColor(status: string) {
 }
 
 function statusLabel(status: string) {
-  if (status === "guclu") return "Yerleşir gibi";
-  if (status === "sinirda") return "Sınırda";
-  if (status === "yakin") return "Yakın";
-  if (status === "bos") return "Boş kalmış";
+  if (status === "guclu") return "Yerlesir gibi";
+  if (status === "sinirda") return "Sinirda";
+  if (status === "yakin") return "Yakin";
+  if (status === "bos") return "Bos kalmis";
   return "Uzak";
 }
 
@@ -49,43 +49,41 @@ export default function TusScore() {
   const temelNet = clamp(Math.round(sectionRows.filter((r) => r.group === "Temel").reduce((sum, r) => sum + r.net, 0) * 10) / 10, -25, 100);
   const klinikNet = clamp(Math.round(sectionRows.filter((r) => r.group === "Klinik").reduce((sum, r) => sum + r.net, 0) * 10) / 10, -25, 100);
   const totalNet = clamp(Math.round((temelNet + klinikNet) * 10) / 10, -50, 200);
-  const tusPuan = calcTusPuan(temelNet, klinikNet);
-  const spTemel = calcSpTemel(temelNet);
-  const spKlinik = calcSpKlinik(klinikNet);
-  const programMatches = searchTusPrograms(programQuery, tusPuan, programQuery.trim() ? 16 : 12);
+  const scoreEstimate = calcTusScores(temelNet, klinikNet);
+  const programMatches = searchTusPrograms(programQuery, scoreEstimate, programQuery.trim() ? 16 : 12);
   const possible = programMatches.filter((m) => m.status === "guclu" || m.status === "sinirda" || m.status === "bos");
 
   return (
     <div className="score-page">
       <div className="score-hero">
         <div>
-          <div className="eyebrow">TUS puan ve yerleşme simülatörü</div>
-          <h1>{tusPuan.toFixed(1)}</h1>
-          <p>Temel ve Klinik Bilimler netlerinden tahmini TUS puanı hesaplanır; ÖSYM yerleştirme taban puanlarına göre kurum ve bölüm bazında arama yapabilirsin.</p>
-          <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer">Kaynak: {TUS_SCORE_SOURCE.label}</a>
+          <div className="eyebrow">TUS puan ve yerlesme simulatoru</div>
+          <h1>{scoreEstimate.kPuan.toFixed(1)}</h1>
+          <p>OSYM modeline gore tahmini K ve T puani hesaplanir. Kesin puan, sinav donemi ortalama, standart sapma ve en buyuk agirlikli puan aciklanmadan birebir hesaplanamaz.</p>
+          <a href={TUS_SCORE_SOURCE.url} target="_blank" rel="noreferrer">Puan formulu: {TUS_SCORE_SOURCE.label}</a>
         </div>
         <div className="score-metrics">
-          <div><span>Temel net</span><strong>{temelNet}</strong><em>100 soru · SP {spTemel}</em></div>
-          <div><span>Klinik net</span><strong>{klinikNet}</strong><em>100 soru · SP {spKlinik}</em></div>
-          <div><span>Toplam net</span><strong>{totalNet}</strong><em>200 soru</em></div>
+          <div><span>K puani</span><strong>{scoreEstimate.kPuan}</strong><em>Klinik agirlikli</em></div>
+          <div><span>T puani</span><strong>{scoreEstimate.tPuan}</strong><em>Temel agirlikli</em></div>
+          <div><span>Toplam net</span><strong>{totalNet}</strong><em>Temel {temelNet} · Klinik {klinikNet}</em></div>
         </div>
       </div>
 
       <section className="placement-panel">
         <div className="panel-head">
           <div>
-            <div className="eyebrow">Nereye yerleşebilirim?</div>
-            <h2>Kurum ve bölüm ara</h2>
+            <div className="eyebrow">Nereye yerlesebilirim?</div>
+            <h2>Kurum ve bolum ara</h2>
           </div>
-          <span className="tag tag-teal">{possible.length} uygun/yakın seçenek</span>
+          <span className="tag tag-teal">{possible.length} uygun/yakin secenek</span>
         </div>
         <div className="placement-search">
           <input
             value={programQuery}
             onChange={(e) => setProgramQuery(e.target.value)}
-            placeholder="Örn: OMÜ plastik, Ankara göz, Hacettepe radyoloji"
+            placeholder="Orn: OMU plastik, Ankara goz, Hacettepe radyoloji"
           />
-          <span>{programQuery.trim() ? "Arama sonucu" : "Puanına göre en yüksek yakın kurumlar"}</span>
+          <span>{programQuery.trim() ? "Arama sonucu" : "Puanina gore en yuksek yakin kurumlar"}</span>
         </div>
         <div className="placement-grid">
           {programMatches.map((item) => (
@@ -96,36 +94,34 @@ export default function TusScore() {
                 <small>{item.message}</small>
               </div>
               <div>
-                <b>{item.minScore === null ? "Boş" : item.minScore.toFixed(2)}</b>
+                <b>{item.minScore === null ? "Bos" : item.minScore.toFixed(2)}</b>
                 <em style={{ color: statusColor(item.status) }}>{statusLabel(item.status)}</em>
-                <small>{item.placed}/{item.quota} yerleşen</small>
+                <small>{item.scoreType} puani · {item.placed}/{item.quota}</small>
               </div>
             </div>
           ))}
         </div>
         {programQuery.trim() && programMatches.length === 0 && (
-          <div className="near-note">
-            Sonuç bulunamadı. Daha kısa aramayı dene: “plastik”, “ankara göz”, “ondokuz mayıs”.
-          </div>
+          <div className="near-note">Sonuc bulunamadi. Daha kisa aramayi dene: plastik, ankara goz, ondokuz mayis.</div>
         )}
       </section>
 
       <section className="score-table-card">
         <div className="panel-head">
           <div>
-            <div className="eyebrow">Ders bazlı net katkı</div>
-            <h2>Tüm TUS dersleri</h2>
+            <div className="eyebrow">Ders bazli net katki</div>
+            <h2>Tum TUS dersleri</h2>
           </div>
-          {Object.keys(overrides).length > 0 && <button className="btn btn-ghost sm" onClick={() => setOverrides({})}>Verilere dön</button>}
+          {Object.keys(overrides).length > 0 && <button className="btn btn-ghost sm" onClick={() => setOverrides({})}>Verilere don</button>}
         </div>
         <table className="plan-table score-table">
           <thead>
             <tr>
               <th style={{ textAlign: "left" }}>Ders</th>
-              <th>Bölüm</th>
+              <th>Bolum</th>
               <th>Soru</th>
-              <th>Başarı</th>
-              <th>Net katkı</th>
+              <th>Basari</th>
+              <th>Net katki</th>
             </tr>
           </thead>
           <tbody>
@@ -163,6 +159,10 @@ export default function TusScore() {
             </tr>
           </tfoot>
         </table>
+        <div className="near-note">
+          <strong>Not:</strong> K puani klinik programlarda, T puani temel bilim programlarinda kullanilir. Kurum arama sonuclari 2025-TUS 2 yerlestirme taban puanlariyla karsilastirilir.
+          {" "}<a href={TUS_PLACEMENT_SOURCE.url} target="_blank" rel="noreferrer">{TUS_PLACEMENT_SOURCE.label}</a>
+        </div>
       </section>
     </div>
   );
