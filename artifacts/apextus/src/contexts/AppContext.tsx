@@ -20,9 +20,14 @@ export interface PersonalNoteEntry {
   date: string;
   cat: string;
   topic: string;
+  vaka?: string;
   question: string;
   selected: string;
+  selectedText?: string;
   correct: string;
+  correctText?: string;
+  explanation?: string;
+  options?: string[];
   noteHtml: string;
 }
 

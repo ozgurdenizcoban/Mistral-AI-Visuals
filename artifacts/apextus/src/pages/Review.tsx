@@ -120,6 +120,11 @@ HTML iskeleti:
                 {isPreparing ? "Hazirlaniyor..." : "Notu hemen hazirla"}
               </button>
             )}
+            {hasContent && (
+              <button className="btn btn-teal sm" onClick={() => rebuildNote(note.id)} disabled={isPreparing}>
+                {isPreparing ? "Yeniden yaziliyor..." : "AI ile derinlestir"}
+              </button>
+            )}
             <button className="btn btn-primary sm" onClick={() => markStudied(note.id)}>Tekrar ettim</button>
           </div>
         </div>

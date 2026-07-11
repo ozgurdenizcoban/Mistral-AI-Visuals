@@ -1,5 +1,6 @@
 const MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY as string;
 const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
+const REQUEST_TIMEOUT_MS = 75000;
 
 // Serializing queue — prevents concurrent calls from bypassing the rate limit
 let _queueTail: Promise<void> = Promise.resolve();
@@ -32,14 +33,21 @@ async function mistralCall(
     }
 
     async function doFetch() {
-      return fetch(MISTRAL_URL, {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        return await fetch(MISTRAL_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${MISTRAL_API_KEY}`,
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      } finally {
+        window.clearTimeout(timer);
+      }
     }
 
     let resp = await doFetch();
