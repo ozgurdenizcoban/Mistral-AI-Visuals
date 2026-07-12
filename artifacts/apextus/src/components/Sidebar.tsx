@@ -1,5 +1,5 @@
 import { signOut } from "firebase/auth";
-import { BarChart3, BookOpen, Brain, CalendarDays, ChevronRight, ClipboardCheck, Home, LogOut, Settings, Target } from "lucide-react";
+import { Activity, BarChart3, BookOpen, Brain, CalendarDays, ChevronRight, ClipboardCheck, Home, LogOut, Settings, Target } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 
@@ -21,7 +21,8 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
   return (
     <aside className={`app-sidebar ${isOpen ? "open" : ""}`}>
       <button className="brand-block" onClick={() => go("dashboard")}>
-        <span className="brand-mark">A</span><span><strong>ApexTUS</strong><small>Akıllı sınav hazırlığı</small></span>
+        <span className="brand-mark" aria-hidden="true"><Activity size={22} strokeWidth={2.4} /></span>
+        <span className="brand-wordmark"><strong><span>Apex</span><b>TUS</b></strong><small>TUS Hazırlık Platformu</small></span>
       </button>
       <nav className="sidebar-nav">
         <div className="nav-title">ÖĞRENME</div>

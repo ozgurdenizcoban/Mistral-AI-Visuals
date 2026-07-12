@@ -1741,3 +1741,54 @@ button, input, select, textarea { font-family: inherit; letter-spacing: 0; }
 .quiz-ai-visual svg text { fill:#202132 !important; }
 .quiz-ai-visual svg line,
 .quiz-ai-visual svg polyline { stroke:#563ab7 !important; stroke-width:2.5px !important; }
+
+/* Note lists are always light reading surfaces, including nested legacy AI lists. */
+.nb ul,.nb ol,.ai-topic-note ul,.ai-topic-note ol { background:transparent !important; color:#202132 !important; }
+.nb ul li,.nb ol li,.ai-topic-note ul li,.ai-topic-note ol li,
+.nb .tip ul li,.nb .warn ul li,.nb .algo ul li,.nb .mnem ul li,.nb .score-box ul li,
+.ai-topic-note .tip ul li,.ai-topic-note .warn ul li,.ai-topic-note .algo ul li,.ai-topic-note .mnem ul li,.ai-topic-note .score-box ul li {
+  background:#f3f4f7 !important;
+  color:#202132 !important;
+  border:1px solid #d7d9e0 !important;
+  box-shadow:none !important;
+  opacity:1 !important;
+}
+.nb ul li ul li,.nb ol li ol li,.nb ul li ol li,.nb ol li ul li,
+.ai-topic-note ul li ul li,.ai-topic-note ol li ol li {
+  background:#ffffff !important;
+  border-color:#c9ccd5 !important;
+}
+.nb ul li *,.nb ol li *,.ai-topic-note ul li *,.ai-topic-note ol li * { color:#202132 !important; opacity:1 !important; }
+.nb strong,.ai-topic-note strong { color:#171827 !important; }
+.nb ul li::before,.ai-topic-note ul li::before { color:#4f35ae !important; font-weight:900 !important; }
+
+/* ApexTUS professional medical-performance wordmark. */
+.brand-block { gap:12px !important; padding:0 7px !important; }
+.brand-mark {
+  width:40px !important; height:40px !important; border-radius:8px !important;
+  background:#5b3fc0 !important; color:#fff !important;
+  display:grid !important; place-items:center !important;
+  box-shadow:0 5px 12px rgba(91,63,192,.22) !important;
+  position:relative; overflow:hidden;
+}
+.brand-mark::after {
+  content:""; position:absolute; width:18px; height:18px; right:-8px; top:-8px;
+  border:4px solid rgba(255,255,255,.22); transform:rotate(45deg);
+}
+.brand-mark svg { position:relative; z-index:1; }
+.brand-wordmark { display:flex !important; flex-direction:column; margin:0 !important; text-transform:none !important; letter-spacing:0 !important; }
+.brand-wordmark strong {
+  display:flex !important; align-items:baseline; color:#202132 !important;
+  font-family:"Segoe UI",sans-serif !important; font-size:1.05rem !important;
+  font-weight:800 !important; line-height:1 !important; letter-spacing:0 !important; text-transform:none !important;
+}
+.brand-wordmark strong span {
+  display:inline !important; color:#202132 !important; font-size:inherit !important;
+  font-weight:800 !important; letter-spacing:0 !important; text-transform:none !important; margin:0 !important;
+}
+.brand-wordmark strong b { color:#5b3fc0 !important; font-size:inherit !important; font-weight:850 !important; }
+.brand-wordmark small {
+  color:#626372 !important; font-family:"Segoe UI",sans-serif !important;
+  font-size:.61rem !important; font-weight:600 !important; letter-spacing:.015em !important;
+  text-transform:none !important; margin-top:4px !important;
+}
