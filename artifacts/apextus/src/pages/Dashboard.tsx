@@ -1,158 +1,87 @@
-import { BookOpen, Brain, CalendarCheck, ClipboardList, FileText, LineChart, Play, Target, Trophy } from "lucide-react";
+import { ArrowRight, BookOpen, Brain, CalendarCheck, Check, ChevronRight, ClipboardCheck, Clock3, Flame, Play, Sparkles, Target, TrendingUp } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { TREE } from "@/lib/data";
-import { getScoreSimulation, getTopicInsights } from "@/lib/studyInsights";
+import { getTopicInsights } from "@/lib/studyInsights";
 
 export default function Dashboard() {
   const { state, setCurrentPage, setQuizTarget, setNoteTarget, username } = useApp();
-
-  const pct = state.total > 0 ? Math.round((state.correct / state.total) * 100) : 0;
-  const studiedCount = Object.values(state.sr || {}).filter((v) => (v.studyCount || 0) > 0).length;
-  const totalTopics = TREE.reduce((acc, b) => acc + b.topics.length, 0);
-  const coveragePct = totalTopics ? Math.round((studiedCount / totalTopics) * 100) : 0;
-  const dueToday = Object.entries(state.sr || {}).filter(([, v]) => v.nextDate && v.nextDate <= new Date().toISOString().slice(0, 10)).length;
+  const accuracy = state.total ? Math.round((state.correct / state.total) * 100) : 0;
   const insights = getTopicInsights(state);
-  const focus = insights.slice(0, 4);
-  const sim = getScoreSimulation(state, 90, 4, 65);
-  const recentSessions = (state.sessions || []).slice(-4).reverse();
+  const focus = insights.slice(0, 3);
+  const due = Object.values(state.sr || {}).filter((v) => v.nextDate && v.nextDate <= new Date().toISOString().slice(0, 10)).length;
+  const completedToday = Math.min(3, Math.floor((state.total || 0) / 20));
 
-  function startQuiz(cat: string, topic = "") {
-    setQuizTarget({ cat, topic });
+  const openQuiz = (cat?: string, topic?: string) => {
+    if (cat) setQuizTarget({ cat, topic: topic || "" });
     setCurrentPage("quiz");
-  }
-
-  function openNote(cat: string, topic: string) {
+  };
+  const openNote = (cat: string, topic: string) => {
     const branch = TREE.find((b) => b.cat === cat);
     if (!branch) return;
-    setNoteTarget({ cat, icon: branch.icon, topic });
+    setNoteTarget({ cat, topic, icon: branch.icon });
     setCurrentPage("notes");
-  }
-
-  const primaryFocus = focus[0];
+  };
+  const primary = focus[0];
 
   return (
-    <div className="command-page">
-      <section className="command-hero">
-        <div className="command-hero-main">
-          <div className="eyebrow">Apex TUS çalışma merkezi</div>
-          <h1>{username ? `${username}, bugün net çalışalım.` : "Bugün net çalışalım."}</h1>
-          <p>
-            Konu notları, TUS tarzı sorular, denemeler ve tekrar planı tek akışta. Sistem hatalarını ve eksik tekrarlarını analiz edip en yüksek getirili çalışmayı öne çıkarır.
-          </p>
-          <div className="hero-actions">
-            <button className="btn btn-primary lg" onClick={() => primaryFocus ? startQuiz(primaryFocus.cat, primaryFocus.topic) : setCurrentPage("quiz")}>
-              <Play size={16} /> Odak quiz başlat
-            </button>
-            <button className="btn btn-teal lg" onClick={() => setCurrentPage("fulltus")}>
-              <ClipboardList size={16} /> Gerçek TUS denemesi
-            </button>
-            <button className="btn btn-ghost lg" onClick={() => setCurrentPage("notes")}>
-              <BookOpen size={16} /> Konu notları
-            </button>
-          </div>
+    <div className="edu-dashboard">
+      <div className="dashboard-heading">
+        <div><p className="date-label">BUGÜNÜN ÇALIŞMA PLANI</p><h1>Merhaba {username || "doktor"}</h1><p>Hedefine yaklaşmak için bugün üç odaklı adımın var.</p></div>
+        <div className="streak-pill"><Flame size={18} /><span><strong>{state.streak || 0} gün</strong> çalışma serisi</span></div>
+      </div>
+
+      <section className="continue-card">
+        <div className="continue-icon"><Brain size={28} /></div>
+        <div className="continue-copy">
+          <span className="section-kicker"><Sparkles size={14} /> SIRADAKİ EN İYİ ADIM</span>
+          <h2>{primary?.topic || "İlk kişisel öğrenme oturumunu başlat"}</h2>
+          <p>{primary ? `${primary.cat} · ${primary.reason}` : "Kısa bir başlangıç testiyle güçlü ve zayıf konularını belirleyelim."}</p>
+          <div className="continue-meta"><span><Clock3 size={15} /> 20 dakika</span><span><Target size={15} /> 15 hedefli soru</span></div>
         </div>
-        <div className="readiness-panel">
-          <div className="readiness-score">{sim.expectedBand[0]}-{sim.expectedBand[1]}</div>
-          <div className="readiness-label">90 günlük beklenen puan bandı</div>
-          <div className="readiness-bars">
-            <div><span>Kapsam</span><strong>{coveragePct}%</strong></div>
-            <div className="mini-bar"><i style={{ width: `${coveragePct}%` }} /></div>
-            <div><span>Doğruluk</span><strong>{pct}%</strong></div>
-            <div className="mini-bar"><i style={{ width: `${pct}%` }} /></div>
-          </div>
-        </div>
+        <button className="continue-button" onClick={() => openQuiz(primary?.cat, primary?.topic)}><Play size={17} fill="currentColor" /> Devam et</button>
       </section>
 
-      <section className="metric-grid">
-        <div className="metric-card"><FileText size={18} /><span>Çözülen soru</span><strong>{state.total}</strong></div>
-        <div className="metric-card"><Target size={18} /><span>Doğruluk</span><strong>{pct}%</strong></div>
-        <div className="metric-card"><BookOpen size={18} /><span>Konu kapsamı</span><strong>{studiedCount}/{totalTopics}</strong></div>
-        <div className="metric-card"><CalendarCheck size={18} /><span>Bugünkü tekrar</span><strong>{dueToday}</strong></div>
-      </section>
+      <div className="dashboard-columns">
+        <section className="edu-section daily-plan">
+          <div className="edu-section-head"><div><span>GÜNLÜK HEDEF</span><h2>Bugünün görevleri</h2></div><strong>{completedToday}/3 tamamlandı</strong></div>
+          <div className="plan-progress"><i style={{ width: `${completedToday * 33.33}%` }} /></div>
+          <div className="task-list">
+            <button onClick={() => setCurrentPage("review")}>
+              <span className={`task-check ${due === 0 ? "done" : ""}`}>{due === 0 ? <Check size={16} /> : <CalendarCheck size={18} />}</span>
+              <span className="task-copy"><strong>Kişisel tekrarlarını tamamla</strong><small>Yalnızca yanlış yaptığın konulardan {due || 1} tekrar</small></span>
+              <span className="task-time">10 dk</span><ChevronRight size={18} />
+            </button>
+            <button onClick={() => openQuiz(primary?.cat, primary?.topic)}>
+              <span className="task-check"><Brain size={18} /></span>
+              <span className="task-copy"><strong>Hedefli soru oturumu</strong><small>AI analizine göre en yüksek getirili konu</small></span>
+              <span className="task-time">20 dk</span><ChevronRight size={18} />
+            </button>
+            <button onClick={() => setCurrentPage("mockexam")}>
+              <span className="task-check"><ClipboardCheck size={18} /></span>
+              <span className="task-copy"><strong>Günün mini denemesi</strong><small>Temel ve klinik bilimlerden karma 20 soru</small></span>
+              <span className="task-time">25 dk</span><ChevronRight size={18} />
+            </button>
+          </div>
+        </section>
 
-      <section className="work-grid">
-        <div className="panel wide">
-          <div className="panel-head">
-            <div>
-              <div className="eyebrow">Bugünün akıllı planı</div>
-              <h2>En yüksek getirili konular</h2>
-            </div>
-            <button className="btn btn-ghost sm" onClick={() => setCurrentPage("review")}>Planı aç</button>
-          </div>
-          <div className="focus-list">
-            {focus.map((w, i) => (
-              <div className="focus-row" key={w.topic}>
-                <div className="focus-rank">{i + 1}</div>
-                <div className="focus-body">
-                  <div>
-                    <strong>{w.topic}</strong>
-                    <span>{w.cat}</span>
-                  </div>
-                  <p>{w.reason}. {w.action}.</p>
-                </div>
-                <div className="focus-actions">
-                  <button className="btn btn-ghost sm" onClick={() => openNote(w.cat, w.topic)}>Not</button>
-                  <button className="btn btn-teal sm" onClick={() => startQuiz(w.cat, w.topic)}>Quiz</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <aside className="edu-section performance-card">
+          <div className="edu-section-head"><div><span>BU HAFTA</span><h2>İlerlemen</h2></div><TrendingUp size={20} /></div>
+          <div className="accuracy-ring" style={{ "--score": `${accuracy * 3.6}deg` } as React.CSSProperties}><div><strong>%{accuracy}</strong><span>doğruluk</span></div></div>
+          <div className="performance-stats"><div><strong>{state.total}</strong><span>çözülen soru</span></div><div><strong>{state.correct}</strong><span>doğru cevap</span></div></div>
+          <button onClick={() => setCurrentPage("stats")}>Ayrıntılı analizi gör <ArrowRight size={16} /></button>
+        </aside>
+      </div>
 
-        <div className="panel">
-          <div className="panel-head compact">
-            <div>
-              <div className="eyebrow">Hızlı başlangıç</div>
-              <h2>Ders seç</h2>
-            </div>
-          </div>
-          <div className="subject-grid">
-            {TREE.slice(0, 12).map((b) => (
-              <button key={b.cat} onClick={() => startQuiz(b.cat)}>
-                <span>{b.icon}</span>
-                <strong>{b.cat}</strong>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="work-grid bottom">
-        <div className="panel">
-          <div className="panel-head compact">
-            <div>
-              <div className="eyebrow">Deneme modu</div>
-              <h2>Sınav pratiği</h2>
-            </div>
-            <Trophy size={18} />
-          </div>
-          <div className="exam-actions">
-            <button onClick={() => setCurrentPage("fulltus")}><ClipboardList size={17} /> Gerçek TUS denemesi</button>
-            <button onClick={() => setCurrentPage("mockexam")}><Brain size={17} /> Hedefli mini deneme</button>
-            <button onClick={() => setCurrentPage("tusscore")}><LineChart size={17} /> Puan simülatörü</button>
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-head compact">
-            <div>
-              <div className="eyebrow">Son oturumlar</div>
-              <h2>Performans izi</h2>
-            </div>
-          </div>
-          {recentSessions.length ? (
-            <div className="session-list">
-              {recentSessions.map((s, i) => (
-                <div className="session-row" key={i}>
-                  <span>{s.cat}</span>
-                  <strong>{s.c}/{s.t}</strong>
-                  <em>{s.p}%</em>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">Henüz oturum yok. İlk quizden sonra analiz burada görünür.</div>
-          )}
+      <section className="edu-section focus-section">
+        <div className="edu-section-head"><div><span>AI ÖNERİSİ</span><h2>Öncelikli konuların</h2><p>Son cevaplarına göre en çok puan kazandırabilecek alanlar.</p></div><button onClick={() => setCurrentPage("review")}>Tüm planı gör</button></div>
+        <div className="focus-cards">
+          {(focus.length ? focus : TREE.slice(0, 3).map((b) => ({ cat: b.cat, topic: b.topics[0], reason: "Başlangıç değerlendirmesi bekleniyor", score: 50 }))).map((item, index) => (
+            <article key={`${item.cat}-${item.topic}`}>
+              <div className="focus-card-top"><span className="focus-number">0{index + 1}</span><span className={`priority priority-${index}`}>{index === 0 ? "Yüksek öncelik" : index === 1 ? "Orta öncelik" : "Planlandı"}</span></div>
+              <small>{item.cat}</small><h3>{item.topic}</h3><p>{item.reason}</p>
+              <div className="focus-card-actions"><button onClick={() => openNote(item.cat, item.topic)}><BookOpen size={15} /> Konuyu çalış</button><button aria-label="Soru çöz" onClick={() => openQuiz(item.cat, item.topic)}><ChevronRight size={18} /></button></div>
+            </article>
+          ))}
         </div>
       </section>
     </div>
