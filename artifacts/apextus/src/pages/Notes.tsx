@@ -381,6 +381,9 @@ export default function Notes() {
 }
 
 const PROFESSIONAL_NOTE_STANDARD = `PROFESYONEL NOT STANDARDI:
+- ERISILEBILIRLIK KURALI: Metin ile arka plan arasinda her zaman cok yuksek kontrast kullan. Acik zeminde koyu metin, koyu zeminde saf beyaz metin kullan. Birbirine yakin tonlari ASLA birlikte kullanma.
+- HTML icinde style="color:..." veya style="background:..." yazma. Renk icin yalnizca uygulamanin hazir siniflarini kullan; yeni renk, opak metin veya soluk yazi uretme.
+- Normal paragraflar, listeler, tablolar ve basliklar acik zemin uzerinde koyu metinle okunacak sekilde yazilsin. Bilgi kutularinda metin rengi mutlaka koyu olsun.
 - Bu not, TUS'a hazirlanan bir hekim adayinin ana kaynak gibi kullanabilecegi derinlikte olsun.
 - Konuyu once temel mekanizma, sonra klinik yansima, sonra TUS'ta sorulma bicimi seklinde anlat.
 - Her baslikta "Neden onemli?", "TUS nasil sorar?", "Karistirilan nokta" mantigi bulunsun.

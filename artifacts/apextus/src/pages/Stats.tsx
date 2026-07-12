@@ -73,11 +73,11 @@ export default function Stats() {
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={catData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)" />
-              <XAxis dataKey="name" tick={{ fill: "#8a95a8", fontSize: 9 }} angle={-25} textAnchor="end" height={50} />
-              <YAxis tick={{ fill: "#8a95a8", fontSize: 10 }} domain={[0, 100]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#dedce6" />
+              <XAxis dataKey="name" tick={{ fill: "#4f5060", fontSize: 9 }} angle={-25} textAnchor="end" height={50} />
+              <YAxis tick={{ fill: "#4f5060", fontSize: 10 }} domain={[0, 100]} />
               <Tooltip
-                contentStyle={{ background: "var(--ink2)", border: "1px solid var(--line)", borderRadius: 8, fontFamily: "Syne, sans-serif" }}
+                contentStyle={{ background: "#fff", color: "#202132", border: "1px solid #cbc9d5", borderRadius: 8, fontFamily: "inherit" }}
                 formatter={(v: number) => [`${v}%`, "Başarı"]}
               />
               <Bar dataKey="pct" radius={[4, 4, 0, 0]}>
@@ -100,11 +100,11 @@ export default function Stats() {
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={sessData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)" />
-              <XAxis dataKey="name" tick={{ fill: "#8a95a8", fontSize: 10 }} />
-              <YAxis tick={{ fill: "#8a95a8", fontSize: 10 }} domain={[0, 100]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#dedce6" />
+              <XAxis dataKey="name" tick={{ fill: "#4f5060", fontSize: 10 }} />
+              <YAxis tick={{ fill: "#4f5060", fontSize: 10 }} domain={[0, 100]} />
               <Tooltip
-                contentStyle={{ background: "var(--ink2)", border: "1px solid var(--line)", borderRadius: 8, fontFamily: "Syne, sans-serif" }}
+                contentStyle={{ background: "#fff", color: "#202132", border: "1px solid #cbc9d5", borderRadius: 8, fontFamily: "inherit" }}
                 formatter={(v: number) => [`${v}%`, "Başarı"]}
               />
               <Line
