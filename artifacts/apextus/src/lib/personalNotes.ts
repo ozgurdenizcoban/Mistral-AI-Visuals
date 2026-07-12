@@ -12,6 +12,8 @@ const PERSONAL_NOTE_STANDARD = `PROFESYONEL KONU NOTU STANDARDI:
 - ERISILEBILIRLIK KURALI: Metin ve arka plan her zaman yuksek kontrastli olsun. Acik zeminde koyu metin, koyu zeminde saf beyaz metin kullan; yakin tonlari ASLA birlikte kullanma.
 - HTML icinde style="color:..." veya style="background:..." kullanma. Renk icin yalnizca tip, warn, algo, mnem ve score-box siniflarini kullan.
 - Soluk, dusuk opaklikli veya arka planla karisan metin uretme.
+- Diyagram zemini daima acik; oklar ve baglanti cizgileri koyu mor olsun. Siyah genel arka plan veya beyaz/gorunmez ok kullanma.
+- Koyu kutuda saf beyaz, acik kutuda cok koyu metin kullan.
 - Normal konu notlari sayfasindaki gibi tam, ogretici ve sinav odakli konu anlatimi yaz.
 - Bu bir yanlis defteri degil. Yanlis sorular sadece hangi konunun anlatilacagini secmek icin kullanilir.
 - Konuyu sifirdan kur: tanim, mekanizma, klinik yansima, TUS'ta sorulma bicimi.

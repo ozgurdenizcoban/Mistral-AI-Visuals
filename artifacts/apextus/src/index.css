@@ -1640,3 +1640,65 @@ button, input, select, textarea { font-family: inherit; letter-spacing: 0; }
 .nb .score-box,.ai-topic-note .score-box { background:#fff7e8 !important; color:#6d4305 !important; border-color:#d8ac61 !important; }
 .nb .tip *,.nb .warn *,.nb .algo *,.nb .mnem *,.nb .score-box *,
 .ai-topic-note .tip *,.ai-topic-note .warn *,.ai-topic-note .algo *,.ai-topic-note .mnem *,.ai-topic-note .score-box * { color:inherit !important; }
+
+/* Educational diagrams always use an explicit light canvas and visible connectors. */
+.edu-diagram {
+  background: #ffffff !important;
+  color: #202132 !important;
+  border: 1px solid #d5d2df !important;
+  box-shadow: none !important;
+}
+.edu-diagram .ed-title,
+.edu-diagram .ed-label { color:#202132 !important; }
+.edu-diagram .ed-arrow::before {
+  width: 3px !important;
+  min-height: 20px !important;
+  background: #563ab7 !important;
+}
+.edu-diagram .ed-arrow::after {
+  border-top-color: #563ab7 !important;
+}
+.edu-diagram .ed-arrow-h::before {
+  height: 3px !important;
+  min-width: 20px !important;
+  background: #563ab7 !important;
+}
+.edu-diagram .ed-arrow-h::after {
+  border-left-color: #563ab7 !important;
+}
+.edu-diagram .ed-red,
+.edu-diagram .ed-orange,
+.edu-diagram .ed-teal,
+.edu-diagram .ed-blue,
+.edu-diagram .ed-purple,
+.edu-diagram .ed-green,
+.edu-diagram .ed-dark,
+.edu-diagram .ed-red *,
+.edu-diagram .ed-orange *,
+.edu-diagram .ed-teal *,
+.edu-diagram .ed-blue *,
+.edu-diagram .ed-purple *,
+.edu-diagram .ed-green *,
+.edu-diagram .ed-dark * { color:#ffffff !important; }
+.edu-diagram .ed-gold,
+.edu-diagram .ed-gray,
+.edu-diagram .ed-gold *,
+.edu-diagram .ed-gray * { color:#111827 !important; }
+.edu-diagram .ed-lbl {
+  background:#d9f8ef !important;
+  color:#164e43 !important;
+  border-color:#60bda8 !important;
+  font-weight:800 !important;
+}
+/* Repair older AI diagrams that embedded unsafe black inline panels. */
+.edu-diagram [style*="background: #0"],
+.edu-diagram [style*="background:#0"],
+.edu-diagram [style*="background: rgb(0"],
+.edu-diagram [style*="background:rgb(0"] {
+  background:#f3f1f8 !important;
+  color:#202132 !important;
+}
+.edu-diagram [style*="background: #0"] *,
+.edu-diagram [style*="background:#0"] *,
+.edu-diagram [style*="background: rgb(0"] *,
+.edu-diagram [style*="background:rgb(0"] * { color:#202132 !important; }
