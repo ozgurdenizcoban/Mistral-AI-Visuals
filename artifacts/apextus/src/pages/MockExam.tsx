@@ -292,15 +292,15 @@ Sadece HTML yaz.`;
                 <button key={b.cat} onClick={() => toggleCat(b.cat)} style={{
                   display: "flex", alignItems: "center", gap: 8,
                   padding: "8px 12px", borderRadius: 9, border: "none", cursor: "pointer",
-                  background: on ? "rgba(232,83,74,.15)" : "rgba(255,255,255,.04)",
-                  color: on ? "var(--ac)" : "var(--t2)",
+                  background: on ? "#5b3fc0" : "#ffffff",
+                  color: on ? "#ffffff" : "#343545",
                   fontFamily: "Syne, sans-serif", fontSize: ".78rem", fontWeight: on ? 700 : 500,
                   textAlign: "left", transition: "all .12s",
-                  outline: on ? "1px solid rgba(232,83,74,.35)" : "1px solid transparent",
+                  outline: on ? "2px solid #4931a5" : "1px solid #d9d7e2",
                 }}>
                   <span>{b.icon}</span>
                   <span style={{ flex: 1 }}>{b.cat}</span>
-                  {on && <span style={{ fontSize: ".65rem", color: "var(--ac)" }}>✓</span>}
+                  {on && <span style={{ fontSize: ".65rem", color: "#ffffff" }}>✓</span>}
                 </button>
               );
             })}

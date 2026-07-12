@@ -133,6 +133,7 @@ KALITE KURALLARI:
 - TUS tuzaklari, esik degerleri, klasik bulgular ve tedavi algoritmalari kullanilsin.
 - Aciklama dogru cevabi ve en az 2 yanlis secenegin neden elendigini anlatsin.
 - Sadece gorsel gercekten klinik akil yurutmeyi guclendiriyorsa visualHtml ekle. AI cizimi gerekiyorsa guvenli inline <svg> veya <div class="quiz-ai-diagram"> kullan; gereksizse visualHtml bos string olsun. Sistem uygun konularda ayrica Wikipedia/Wikimedia gorseli ekleyebilir.
+- visualHtml zemini daima beyaz veya cok acik olsun. Siyah/koyu genel arka plan kullanma. Tum metinler koyu ve yuksek kontrastli, oklar ve baglanti cizgileri belirgin koyu mor olsun. Koyu zemin ustune koyu yazi veya acik zemin ustune beyaz yazi ASLA kullanma.
 ZORLUK: ${diff}
 SORU TİPLERİ: ${tiplar.join(", ")}
 

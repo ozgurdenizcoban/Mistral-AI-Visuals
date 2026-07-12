@@ -318,13 +318,13 @@ export default function FullTUS() {
               return (
                 <button key={opt.val} onClick={() => setScale(opt.val)} style={{
                   padding: "14px 10px", borderRadius: 10, border: "none", cursor: "pointer",
-                  background: on ? "rgba(232,83,74,.15)" : "rgba(255,255,255,.04)",
-                  outline: on ? "2px solid rgba(232,83,74,.5)" : "2px solid transparent",
+                  background: on ? "#5b3fc0" : "#ffffff",
+                  outline: on ? "2px solid #4931a5" : "1px solid #d9d7e2",
                   transition: "all .12s", textAlign: "center",
                 }}>
-                  <div style={{ fontSize: "1.1rem", fontWeight: 900, color: on ? "var(--ac)" : "var(--cream)", fontFamily: "Playfair Display, serif" }}>{opt.val}</div>
-                  <div style={{ fontSize: ".72rem", fontWeight: 700, color: on ? "var(--ac)" : "var(--t2)", marginTop: 3 }}>{opt.label}</div>
-                  <div style={{ fontSize: ".65rem", color: "var(--t3)", marginTop: 2 }}>{opt.desc}</div>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 900, color: on ? "#ffffff" : "#202132", fontFamily: "Playfair Display, serif" }}>{opt.val}</div>
+                  <div style={{ fontSize: ".72rem", fontWeight: 700, color: on ? "#ffffff" : "#343545", marginTop: 3 }}>{opt.label}</div>
+                  <div style={{ fontSize: ".65rem", color: on ? "#f0ecff" : "#565767", marginTop: 2 }}>{opt.desc}</div>
                 </button>
               );
             })}

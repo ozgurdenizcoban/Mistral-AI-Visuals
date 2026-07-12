@@ -1702,3 +1702,42 @@ button, input, select, textarea { font-family: inherit; letter-spacing: 0; }
 .edu-diagram [style*="background:#0"] *,
 .edu-diagram [style*="background: rgb(0"] *,
 .edu-diagram [style*="background:rgb(0"] * { color:#202132 !important; }
+
+/* Stronger accessible text tokens used by every non-diagram screen. */
+:root {
+  --ac:#5b3fc0;
+  --ac2:#4931a5;
+  --teal:#08725f;
+  --gold:#805009;
+  --t2:#4f5060;
+  --t3:#606171;
+}
+.focus-number { color:#686978 !important; }
+.edu-section-head span,
+.task-copy small,
+.task-time,
+.accuracy-ring span,
+.performance-stats span,
+.focus-cards p { color:#565767 !important; }
+.eyebrow { color:#08725f !important; }
+
+/* AI question visuals follow the same light-canvas contract as lesson diagrams. */
+.quiz-clinical-img,
+.quiz-ai-visual,
+.quiz-ai-visual > div,
+.quiz-ai-diagram {
+  background:#ffffff !important;
+  color:#202132 !important;
+  border-color:#d5d2df !important;
+}
+.quiz-ai-diagram [style*="background: #0"],
+.quiz-ai-diagram [style*="background:#0"],
+.quiz-ai-diagram [style*="background: rgb(0"],
+.quiz-ai-diagram [style*="background:rgb(0"] {
+  background:#f3f1f8 !important;
+  color:#202132 !important;
+}
+.quiz-ai-diagram [style*="color"] { color:#202132 !important; }
+.quiz-ai-visual svg text { fill:#202132 !important; }
+.quiz-ai-visual svg line,
+.quiz-ai-visual svg polyline { stroke:#563ab7 !important; stroke-width:2.5px !important; }
