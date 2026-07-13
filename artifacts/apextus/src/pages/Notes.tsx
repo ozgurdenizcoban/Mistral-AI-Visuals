@@ -5,14 +5,39 @@ import { mistralCompleteText, mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
 import { fetchMedicalImage, getTopicDiagramQuery } from "@/lib/imageGen";
 import { getSourceGuide } from "@/lib/sourceGuides";
-import { getMandatoryNoteAnchors, getNoteCoverageContract } from "@/lib/noteCoverage";
+import { getMandatoryNoteAnchors, getNoteCoverageContract, NoteGenerationPart } from "@/lib/noteCoverage";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
 const noteCache: Record<string, string> = {};
 const notePartCache: Record<string, string[]> = {};
-const NOTE_SCHEMA_VERSION = 3;
-type NotePart = 1 | 2 | 3 | 4;
+const NOTE_SCHEMA_VERSION = 4;
+const NOTE_PART_COUNT = 10;
+
+function partialNoteKey(topic: string) {
+  return `apextus-note-parts-v4:${topic}`;
+}
+
+function loadPartialNoteParts(topic: string) {
+  if (notePartCache[topic]) return notePartCache[topic];
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(partialNoteKey(topic)) || "[]");
+    notePartCache[topic] = Array.isArray(parsed) ? parsed.filter((part) => typeof part === "string") : [];
+  } catch (_) {
+    notePartCache[topic] = [];
+  }
+  return notePartCache[topic];
+}
+
+function savePartialNoteParts(topic: string, parts: string[]) {
+  notePartCache[topic] = parts;
+  try { sessionStorage.setItem(partialNoteKey(topic), JSON.stringify(parts)); } catch (_) {}
+}
+
+function clearPartialNoteParts(topic: string) {
+  delete notePartCache[topic];
+  try { sessionStorage.removeItem(partialNoteKey(topic)); } catch (_) {}
+}
 
 interface PreparedNote {
   html: string;
@@ -267,25 +292,35 @@ export default function Notes() {
 
     try {
       const stageLabels = [
-        "Temel bilgiler ve mekanizma yazılıyor",
-        "Klinik bulgular ve tanı yazılıyor",
-        "Laboratuvar ve tedavi yazılıyor",
-        "Komplikasyonlar ve TUS ayrıntıları yazılıyor",
+        "Tanım, epidemiyoloji ve etiyoloji yazılıyor",
+        "Patofizyoloji ve mekanizma yazılıyor",
+        "Sınıflama ve bütün alt tipler yazılıyor",
+        "Klinik bulgular ve vaka örüntüleri yazılıyor",
+        "Belirteçler ve tanı algoritması yazılıyor",
+        "Laboratuvar, görüntüleme ve skorlar yazılıyor",
+        "Tedavi, direnç ve izlem yazılıyor",
+        "Komplikasyonlar ve prognoz yazılıyor",
+        "Ayırıcı tanı karşılaştırmaları yazılıyor",
+        "TUS spotları ve aktif hatırlama yazılıyor",
       ];
-      const completedParts = notePartCache[topic] || [];
-      notePartCache[topic] = completedParts;
-      for (let index = completedParts.length; index < 4; index += 1) {
-        const part = (index + 1) as NotePart;
-        setNoteStage(`${stageLabels[index]} (${part}/4)`);
-        const generatedPart = await mistralCompleteText(buildNotePrompt(cat, topic, part), 6500, 0.2);
+      const completedParts = loadPartialNoteParts(topic);
+      for (let index = completedParts.length; index < NOTE_PART_COUNT; index += 1) {
+        const part = (index + 1) as NoteGenerationPart;
+        setNoteStage(`${stageLabels[index]} (${part}/${NOTE_PART_COUNT})`);
+        const generatedPart = await mistralCompleteText(buildNotePrompt(cat, topic, part), 3500, 0.18);
         completedParts.push(cleanContent(generatedPart));
+        savePartialNoteParts(topic, completedParts);
       }
       let html = completedParts.join("\n");
       const missingAnchors = findMissingCoverageAnchors(html, getMandatoryNoteAnchors(cat, topic));
       if (missingAnchors.length) {
-        setNoteStage(`${missingAnchors.length} eksik alt başlık tamamlanıyor`);
-        const supplement = await mistralCompleteText(buildCoverageSupplementPrompt(cat, topic, missingAnchors), 8000, 0.18);
-        html += `\n${cleanContent(supplement)}`;
+        const batches = Array.from({ length: Math.ceil(missingAnchors.length / 5) }, (_, index) =>
+          missingAnchors.slice(index * 5, index * 5 + 5));
+        for (let index = 0; index < batches.length; index += 1) {
+          setNoteStage(`Eksik alt başlıklar tamamlanıyor (${index + 1}/${batches.length})`);
+          const supplement = await mistralCompleteText(buildCoverageSupplementPrompt(cat, topic, batches[index]), 3500, 0.16);
+          html += `\n${cleanContent(supplement)}`;
+        }
       }
       const prepared = prepareNoteContent(html);
       if (!prepared.isComplete) throw new Error("Konu notu tamamlanmadan yanıt kesildi. Eksik içerik kaydedilmedi; yeniden dene.");
@@ -302,14 +337,14 @@ export default function Notes() {
       }
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
-      delete notePartCache[topic];
+      clearPartialNoteParts(topic);
       setNoteHtml(full);
       toast.success(`${topic} notu yüklendi`);
       fbSaveNote(topic, cleanHtml, cleanLink, [], NOTE_SCHEMA_VERSION).catch(() => {});
     } catch (e) {
       const savedParts = notePartCache[topic]?.length || 0;
       const resumeMessage = savedParts
-        ? ` ${savedParts}/4 bölüm korundu; Yenile ile kaldığı yerden devam edebilirsin.`
+        ? ` ${savedParts}/${NOTE_PART_COUNT} bölüm korundu; Yenile ile kaldığı yerden devam edebilirsin.`
         : "";
       toast.error("Not yüklenemedi: " + (e as Error).message + resumeMessage);
       setNoteHtml(`<div class="warn"><strong>Hazırlama geçici olarak durdu.</strong> ${(e as Error).message}${resumeMessage}</div>`);
@@ -505,7 +540,7 @@ export default function Notes() {
                   {noteStage}<span className="loading-dots" />
                 </div>
                 <div style={{ color: "var(--t2)", fontSize: ".72rem", marginTop: 4 }}>
-                  Dört kısa aşamada ayrıntılı TUS fasikülü hazırlanıyor; tamamlanan bölümler korunur
+                  10 kısa aşamada ayrıntılı TUS fasikülü hazırlanıyor; sayfa yenilense de tamamlanan bölümler korunur
                 </div>
               </div>
             ) : noteHtml ? (
@@ -542,28 +577,25 @@ const PROFESSIONAL_NOTE_STANDARD = `PROFESYONEL NOT STANDARDI:
 - Karar agaclari metin cizimi degil, ogrencinin takip edebilecegi iki kollu secim diyagrami gibi tasarlansin.
 - Sayisal esikler, skorlar, dozlar, laboratuvar referanslari ve klasik bulgular atlanmasin.
 - Gereksiz genel kultur anlatimi yapma; sinavda puan getirecek bilgiye yogunlas.`;
-function buildNotePrompt(cat: string, topic: string, part: NotePart): string {
-  const sectionsByPart: Record<NotePart, string> = {
-    1: `<h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>
-<h2>2. Patofizyoloji</h2>
-<h2>3. Sınıflama ve Evreleme</h2>`,
-    2: `<h2>4. Klinik Bulgular</h2>
-<h2>5. Seroloji / Belirteçler (varsa)</h2>
-<h2>6. Tanı Kriterleri ve Algoritma</h2>`,
-    3: `<h2>7. Laboratuvar ve Görüntüleme</h2>
-<h2>8. Skorlama Sistemleri (varsa)</h2>
-<h2>9. Tedavi</h2>`,
-    4: `<h2>10. Komplikasyonlar ve Prognoz</h2>
-<h2>11. Ayırıcı Tanı</h2>
-<h2>12. TUS SPOTLARI ve KALICI İPUÇLARI</h2>
-<h2>13. Aktif Hatırlama ve Klinik Bağlantı Özeti</h2>`,
+function buildNotePrompt(cat: string, topic: string, part: NoteGenerationPart): string {
+  const sectionsByPart: Record<NoteGenerationPart, string> = {
+    1: `<h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>`,
+    2: `<h2>2. Patofizyoloji</h2>`,
+    3: `<h2>3. Sınıflama ve Evreleme</h2>`,
+    4: `<h2>4. Klinik Bulgular</h2>`,
+    5: `<h2>5. Seroloji / Belirteçler</h2><h2>6. Tanı Kriterleri ve Algoritma</h2>`,
+    6: `<h2>7. Laboratuvar ve Görüntüleme</h2><h2>8. Skorlama Sistemleri</h2>`,
+    7: `<h2>9. Tedavi</h2>`,
+    8: `<h2>10. Komplikasyonlar ve Prognoz</h2>`,
+    9: `<h2>11. Ayırıcı Tanı</h2>`,
+    10: `<h2>12. TUS SPOTLARI ve KALICI İPUÇLARI</h2><h2>13. Aktif Hatırlama ve Klinik Bağlantı Özeti</h2>`,
   };
   const requiredSections = sectionsByPart[part];
   return `Sen kıdemli bir TUS akademisyeni ve ders notu editörüsün. Aşağıdaki konu için TUS'ta çıkabilecek HİÇBİR BİLGİYİ ATLAMAMAK şartıyla tam, profesyonel ve kapsamlı bir konu notu hazırla.
 
 KONU: ${cat} — ${topic}
-BU DÖRT AŞAMALI NOTUN ${part}. BÖLÜMÜDÜR. Yalnızca aşağıda istenen bölüm başlıklarını üret; diğer bölümlerin başlıklarını tekrar etme.
-Bu bölümde en fazla 1 diyagram kullan; ayrıntıyı kutulara sıkıştırmak yerine okunabilir paragraf, liste ve karşılaştırma tablolarıyla ver.
+BU 10 AŞAMALI NOTUN ${part}. BÖLÜMÜDÜR. Yalnızca aşağıda istenen bölüm başlıklarını üret; diğer bölümlerin başlıklarını tekrar etme.
+${[2, 5, 7].includes(part) ? "Bu bölümde gerçekten öğreticiyse en fazla 1 diyagram kullan." : "Bu bölümde diyagram üretme."} Ayrıntıyı okunabilir paragraf, liste ve karşılaştırma tablolarıyla ver.
 
 ${PROFESSIONAL_NOTE_STANDARD}
 
@@ -718,11 +750,13 @@ ZORUNLU KURALLAR:
 • Diyagram başlıkları konuya özel olsun ("PAT0FİZYOLOJİ — KALBİ YETMEZLİK" gibi)
 • Patofizyoloji, sınıflama ve tedavi konumlarından yalnızca konuyu en iyi öğreten iki tanesine uygun diyagram yerleştir
 
+BU PARÇANIN DİYAGRAM KARARI: ${[2, 5, 7].includes(part) ? "Yalnızca gerçekten öğreticiyse en fazla 1 diyagram kullan." : "Diyagram üretme; doğrudan ayrıntılı metin ve tablo yaz."}
+
 BU AŞAMADA ÜRETİLECEK ZORUNLU BÖLÜMLER:
 ${requiredSections}
 
 UZUNLUK VE DERİNLİK KURALI:
-- Bu bölüm 1200-1800 kelime arasında olsun; konuyu özetlemeden ayrıntılı işle.
+- Bu bölüm 700-1000 kelime arasında olsun; konuyu özetlemeden ayrıntılı işle.
 - Her zorunlu kapsam öğesini adıyla işle ve ayırt ettiren sınav bilgilerini yaz.
 - Kısa özet üretme. Bir TUS adayının başka ana kaynağa ihtiyaç duymadan tekrar yapabileceği fasikül ayrıntısında yaz.
 - Yanıtı son zorunlu bölüm tamamen kapanmadan bitirme.

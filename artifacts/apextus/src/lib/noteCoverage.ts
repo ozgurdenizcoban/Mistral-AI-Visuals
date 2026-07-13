@@ -69,16 +69,24 @@ function subjectContract(cat: string) {
   return "Tanım ve epidemiyolojiden başlayıp mekanizma, sınıflama, klinik, tanı, ayırıcı tanı, tedavi, izlem, komplikasyon ve prognozu kılavuz mantığında eksiksiz işle.";
 }
 
-export function getNoteCoverageContract(cat: string, topic: string, part: 1 | 2 | 3 | 4) {
+export type NoteGenerationPart = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
+export function getNoteCoverageContract(cat: string, topic: string, part: NoteGenerationPart) {
   const anchors = cat === "Mikrobiyoloji" ? MICROBIOLOGY_ANCHORS[topic] || [] : [];
   const focusByPart = {
-    1: "Bu bölümde temel özellikleri, etiyolojiyi, mekanizmayı, epidemiyolojiyi ve sınıflamayı ayrıntılandır.",
-    2: "Bu bölümde klinik tabloları, seroloji/belirteçleri ve tanı algoritmalarını ayrıntılandır.",
-    3: "Bu bölümde laboratuvar-görüntüleme, skorlar ve tüm tedavi seçeneklerini ayrıntılandır.",
-    4: "Bu bölümde komplikasyon, prognoz, ayırıcı tanı, TUS tuzakları ve aktif hatırlamayı ayrıntılandır.",
+    1: "Tanım, kapsam, epidemiyoloji, risk grupları ve etiyolojik çerçeveyi ayrıntılandır.",
+    2: "Hücresel-moleküler mekanizmayı neden-sonuç sırasıyla ayrıntılandır.",
+    3: "Sınıflamayı bütün alt tipleri kapsayan karşılaştırmalı bir sistem halinde ayrıntılandır.",
+    4: "Klinik tabloları, klasik vaka örüntülerini ve ayırt ettiren bulguları ayrıntılandır.",
+    5: "Belirteçleri ve tanı algoritmasını duyarlılık-özgüllük ve doğrulama mantığıyla ayrıntılandır.",
+    6: "Laboratuvar, görüntüleme ve varsa skorları seçim ve yorumlama mantığıyla ayrıntılandır.",
+    7: "Tedaviyi ilk seçenek, alternatif, doz/yol, direnç, kontrendikasyon ve izlemle ayrıntılandır.",
+    8: "Komplikasyonları, prognozu, takip ölçütlerini ve kötü prognostik faktörleri ayrıntılandır.",
+    9: "Ayırıcı tanıyı benzer durumlarla karşılaştırmalı ve vaka çözme odaklı ayrıntılandır.",
+    10: "TUS spotlarını, istisnaları, sık tuzakları, aktif hatırlama sorularını ve klinik bağlantıları ayrıntılandır.",
   } as const;
   const focus = focusByPart[part];
-  const anchorText = anchors.length
+  const anchorText = anchors.length && [3, 4, 5, 7].includes(part)
     ? `\nKONUYA ÖZEL ZORUNLU KAPSAM (${anchors.length} öğe):\n${anchors.map((item) => `- ${item}`).join("\n")}\nBu listedeki hiçbir öğeyi "vb." diyerek geçme. Her birinin adı ve ayırt ettiren en az 3 sınav bilgisi açıkça yer alsın.`
     : "";
 
