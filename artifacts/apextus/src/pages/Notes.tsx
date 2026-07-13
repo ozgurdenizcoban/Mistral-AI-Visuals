@@ -170,7 +170,7 @@ export default function Notes() {
     try {
       const cached = await fbGetNote(topic);
       if (cached?.html) {
-        const full = buildNoteHtml(cat, topic, cached.html, cached.linkHtml || "");
+        const full = buildNoteHtml(cat, topic, curateMnemonics(cached.html), cached.linkHtml || "");
         noteCache[topic] = full;
         setNoteHtml(full);
         setNoteLoading(false);
@@ -181,7 +181,7 @@ export default function Notes() {
     try {
       const html = await mistralText(buildNotePrompt(cat, topic), 8000, 0.35);
       const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 3000, 0.4);
-      const cleanHtml = cleanContent(html);
+      const cleanHtml = curateMnemonics(cleanContent(html));
       const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
@@ -217,6 +217,30 @@ export default function Notes() {
       .trim()
       .replace(/\\n/g, "")
       .replace(/\\t/g, " ");
+  }
+
+  function curateMnemonics(html: string) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+
+    doc.querySelectorAll("h2, h3").forEach((heading) => {
+      heading.textContent = (heading.textContent || "")
+        .replace(/\s*(ve|&)\s*mnemonik(ler)?/gi, " ve Kalıcı İpuçları")
+        .replace(/mnemonik(ler)?/gi, "Kalıcı İpuçları");
+    });
+
+    doc.querySelectorAll<HTMLElement>(".mnem").forEach((block) => {
+      const phrase = block.querySelector<HTMLElement>(".mnem-phrase")?.textContent?.trim() || "";
+      const mappings = Array.from(block.querySelectorAll<HTMLElement>(".mnem-map li"));
+      const hasReadablePhrase = phrase.length >= 4 && phrase.length <= 120 && /[a-zçğıöşü]/i.test(phrase);
+      const hasExplicitMapping = mappings.length >= 3 && mappings.length <= 8
+        && mappings.every((item) => /[–—:-]/.test(item.textContent || ""));
+
+      // Legacy notes used unstructured, forced mnemonics. Only the new auditable
+      // format survives so a catchy phrase can never hide an incorrect mapping.
+      if (!hasReadablePhrase || !hasExplicitMapping) block.remove();
+    });
+
+    return doc.body.innerHTML.trim();
   }
 
   async function refreshNote(cat: string, icon: string, topic: string) {
@@ -421,7 +445,11 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - <div class="warn"><strong>DİKKAT:</strong> ...</div>
 - <div class="algo"><strong>ALGORİTMA:</strong> Adım 1 → Adım 2 → Adım 3 (tanı/tedavi akış diyagramı)</div>
 - Karar agaci icin <pre>, <code>, ASCII cizim, dal karakterleri veya tek parca metin agaci kullanma. Bunun yerine asagidaki TANI / KARAR ALGORITMASI edu-diagram sablonunu kullan.
-- <div class="mnem"><strong>🧠 MNEM:</strong> ...</div>
+- MNEMONİK ZORUNLU DEĞİLDİR. Konu doğal ve güvenilir bir hatırlatma tekniğine uygun değilse hiç mnemonic yazma.
+- Yalnızca yerleşik bir tıbbi mnemonic veya terimlerle birebir eşleşen, doğal Türkçe bir ifade kullan. Sırf baş harfler uysun diye anlamsız, absürt ya da zorlama cümle kurma.
+- Mnemonic en fazla 3 tane olsun ve her biri 3-8 bilgi içersin. Baş harf, sıra ve tıbbi bilgi eşleşmesini yazmadan önce tek tek doğrula.
+- Kabul edilen tek HTML biçimi: <div class="mnem verified-mnem"><strong>Akılda tut:</strong><p class="mnem-phrase">Doğal ve anlamlı ifade</p><ul class="mnem-map"><li><strong>Harf/kelime</strong> — Karşılık gelen tıbbi bilgi</li></ul></div>
+- Her mnemonicten sonra neden işe yaradığını tek cümlede açıkla. Açık eşleştirme listesini kuramıyorsan mnemonic ekleme; bilgiyi normal TUS spotu olarak yaz.
 - <div class="score-box"><div class="score-title">SKOR</div>...</div>
 
 GÖRSEL DİYAGRAM KURALI (ZORUNLU — EN ÖNEMLİ KURAL):
@@ -554,7 +582,7 @@ ZORUNLU BÖLÜMLER:
 <h2>9. Tedavi</h2>
 <h2>10. Komplikasyonlar ve Prognoz</h2>
 <h2>11. Ayırıcı Tanı</h2>
-<h2>12. TUS SPOTLARI ve MNEMONİKLER</h2>
+<h2>12. TUS SPOTLARI ve KALICI İPUÇLARI</h2>
 <h2>13. KLİNİK BAĞLANTI NOTLARI</h2>
 
 Şimdi başla:`;
