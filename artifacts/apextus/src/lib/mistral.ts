@@ -37,7 +37,7 @@ async function mistralCall(
       body.response_format = { type: "json_object" };
     }
 
-    async function doFetch() {
+    async function doFetch(requestBody: Record<string, unknown>) {
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       try {
@@ -47,7 +47,7 @@ async function mistralCall(
           "Content-Type": "application/json",
           Authorization: `Bearer ${MISTRAL_API_KEY}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
       } finally {
@@ -55,43 +55,73 @@ async function mistralCall(
       }
     }
 
-    let resp: Response;
-    try {
-      resp = await doFetch();
-    } catch (error) {
-      if ((error as Error).name === "AbortError") {
-        throw new Error("AI yanıtı zaman aşımına uğradı. Lütfen yeniden dene.");
-      }
-      throw new Error("AI servisine bağlanılamadı. İnternet bağlantını kontrol edip yeniden dene.");
-    }
-
-    // Retry once when the provider is busy or temporarily unavailable.
-    if ([408, 429, 500, 502, 503, 504].includes(resp.status)) {
-      const retryAfter = Number(resp.headers.get("retry-after") || "0");
-      const wait = retryAfter > 0 ? Math.min(retryAfter * 1000, 15000) : (resp.status === 429 ? 8000 : 4000);
-      await new Promise((r) => setTimeout(r, wait));
-      resp = await doFetch();
-    }
-
-    if (!resp.ok) {
-      let et = `HTTP ${resp.status}`;
+    async function request(requestBody: Record<string, unknown>) {
+      let resp: Response;
       try {
-        const ed = await resp.json();
-        et = ed?.message || ed?.error?.message || et;
-      } catch (_) {}
-      if (resp.status === 401 || resp.status === 403) et = "AI erişim anahtarı geçersiz veya yetkisiz.";
-      if (resp.status === 402) et = "Mistral kullanım bakiyesi yetersiz.";
-      if (resp.status === 429) et = "AI kullanım sınırına ulaşıldı. Bir dakika sonra yeniden dene.";
-      throw new Error(et);
+        resp = await doFetch(requestBody);
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          throw new Error("AI yanıtı zaman aşımına uğradı. Tamamlanan bölümler korundu; Yenile ile devam et.");
+        }
+        throw new Error("AI servisine bağlanılamadı. İnternet bağlantını kontrol edip yeniden dene.");
+      }
+
+      // Retry once when the provider is busy or temporarily unavailable.
+      if ([408, 429, 500, 502, 503, 504].includes(resp.status)) {
+        const retryAfter = Number(resp.headers.get("retry-after") || "0");
+        const wait = retryAfter > 0 ? Math.min(retryAfter * 1000, 15000) : (resp.status === 429 ? 8000 : 4000);
+        await new Promise((r) => setTimeout(r, wait));
+        resp = await doFetch(requestBody);
+      }
+
+      if (!resp.ok) {
+        let et = `HTTP ${resp.status}`;
+        try {
+          const ed = await resp.json();
+          et = ed?.message || ed?.error?.message || et;
+        } catch (_) {}
+        if (resp.status === 401 || resp.status === 403) et = "AI erişim anahtarı geçersiz veya yetkisiz.";
+        if (resp.status === 402) et = "Mistral kullanım bakiyesi yetersiz.";
+        if (resp.status === 429) et = "AI kullanım sınırına ulaşıldı. Bir dakika sonra yeniden dene.";
+        throw new Error(et);
+      }
+      return resp.json();
     }
 
-    const data = await resp.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content || content.trim().length < 5) throw new Error("Boş yanıt");
+    let data = await request(body);
+    let content = data?.choices?.[0]?.message?.content?.trim() || "";
+    if (content.length < 5) throw new Error("Boş yanıt");
+
     if (requireComplete && data?.choices?.[0]?.finish_reason === "length") {
-      throw new Error("AI yanıtı yarıda kaldı. Not eksik kaydedilmedi; lütfen yeniden dene.");
+      const continuationBudgets = [Math.min(maxTokens, 3000), 1600, 800];
+      for (let index = 0; index < continuationBudgets.length && data?.choices?.[0]?.finish_reason === "length"; index += 1) {
+        const lastChance = index === continuationBudgets.length - 1;
+        const continuationInstruction = lastChance
+          ? "Önceki yanıt çıktı sınırında kesildi. Tekrar etmeden açık kalan düşünceyi ve HTML etiketlerini en kısa biçimde tamamla. Yeni başlık açma. Sadece devam HTML'sini yaz ve mutlaka bitir."
+          : "Önceki yanıt çıktı sınırında kesildi. Baştan başlama ve hiçbir bölümü tekrar etme. Tam kesildiği yerden devam ederek istenen mevcut bölümü ve açık HTML etiketlerini tamamla. Sadece devam HTML'sini yaz.";
+        const continuationBody: Record<string, unknown> = {
+          ...body,
+          messages: [
+            { role: "user", content: prompt },
+            { role: "assistant", content },
+            { role: "user", content: continuationInstruction },
+          ],
+          max_tokens: continuationBudgets[index],
+          temperature: Math.min(temp, 0.15),
+        };
+        data = await request(continuationBody);
+        const nextContent = (data?.choices?.[0]?.message?.content || "")
+          .replace(/^```(?:html)?\s*/i, "")
+          .replace(/\s*```\s*$/, "")
+          .trim();
+        if (nextContent.length < 2) break;
+        content += `\n${nextContent}`;
+      }
+      if (data?.choices?.[0]?.finish_reason === "length") {
+        throw new Error("AI bölümü birkaç devam denemesine rağmen tamamlayamadı. Tamamlanan bölümler korundu; Yenile ile devam et.");
+      }
     }
-    return content.trim();
+    return content;
   } finally {
     releaseSlot();
   }
