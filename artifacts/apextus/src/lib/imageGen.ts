@@ -32,12 +32,54 @@ async function fetchWikiImage(articleTitle: string): Promise<NoteImage | null> {
   } catch (_) { return null; }
 }
 
+async function searchWikiImage(query: string, excludedUrls: Set<string>): Promise<NoteImage | null> {
+  try {
+    const params = new URLSearchParams({
+      action: "query",
+      generator: "search",
+      gsrsearch: query,
+      gsrnamespace: "0",
+      gsrlimit: "8",
+      prop: "pageimages",
+      piprop: "thumbnail",
+      pithumbsize: "800",
+      pilicense: "any",
+      format: "json",
+      origin: "*",
+    });
+    const resp = await fetch("https://en.wikipedia.org/w/api.php?" + params.toString(), {
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const pages = Object.values(data?.query?.pages || {}) as {
+      title?: string;
+      index?: number;
+      thumbnail?: { source?: string };
+    }[];
+    const genericTitles = /^(medicine|anatomy|physiology|pathology|human body|medical imaging)$/i;
+    const candidate = pages
+      .sort((a, b) => (a.index || 99) - (b.index || 99))
+      .find((page) => {
+        const src = page.thumbnail?.source;
+        return src && !excludedUrls.has(src) && !genericTitles.test(page.title || "");
+      });
+    const src = candidate?.thumbnail?.source;
+    if (!src || !candidate?.title) return null;
+    return { url: src.replace(/\/\d+px-/, "/800px-"), caption: candidate.title };
+  } catch (_) {
+    return null;
+  }
+}
+
 /** Get an English diagram query for any topic using TOPIC_MAP / CAT_FALLBACK.
  *  Appends the given suffix so callers can customise (e.g. "anatomy diagram"). */
 export function getTopicDiagramQuery(topic: string, cat: string, suffix: string): string {
-  const media = TOPIC_MAP[topic] || CAT_FALLBACK[cat];
-  if (media) return `${media.query} ${suffix}`;
-  return `${cat} medical ${suffix}`.toLowerCase();
+  const topicMedia = TOPIC_MAP[topic];
+  if (topicMedia) return `${topicMedia.query} ${suffix}`;
+  const categoryHint = CAT_FALLBACK[cat]?.query || `${cat} medical`;
+  return `${topic} ${categoryHint} ${suffix}`.toLowerCase();
 }
 
 /** Fetch the best educational image for a note topic.
@@ -48,18 +90,25 @@ export async function fetchMedicalImage(
   query: string,
   topic?: string,
   cat?: string,
+  excludedImageUrls: string[] = [],
 ): Promise<NoteImage | null> {
+  const excludedUrls = new Set(excludedImageUrls);
   if (topic) {
-    const media = TOPIC_MAP[topic] || (cat ? CAT_FALLBACK[cat] : null);
+    const media = TOPIC_MAP[topic];
     if (media) {
-      const img = await Promise.race([
-        fetchWikiImage(media.articles[0]),
-        new Promise<null>(resolve => setTimeout(() => resolve(null), 5000)),
-      ]);
-      if (img) return img;
+      const preferSecondary = /pathology|histology|radiology|treatment|pharmacology|mechanism/i.test(query);
+      const orderedArticles = preferSecondary
+        ? [...media.articles.slice(1), media.articles[0]]
+        : media.articles;
+      for (const article of orderedArticles) {
+        const img = await fetchWikiImage(article);
+        if (img && !excludedUrls.has(img.url)) return img;
+      }
     }
   }
-  return null;
+
+  // Leave the slot empty unless a section-specific, distinct image is found.
+  return searchWikiImage(query, excludedUrls);
 }
 
 /* ── Per-topic Wikipedia article & Commons query map ───────── */

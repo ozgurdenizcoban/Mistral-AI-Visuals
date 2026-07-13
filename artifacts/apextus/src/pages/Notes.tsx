@@ -111,25 +111,35 @@ export default function Notes() {
     const capTopic = activeTopic.topic;
     const capCat = activeTopic.cat;
 
-    placeholders.forEach(async (el) => {
-      const query = el.getAttribute("data-q");
-      if (!query) { el.style.display = "none"; return; }
-      el.innerHTML = `<div class="nb-img-skeleton"><span class="spin2"></span>&nbsp;Görsel yükleniyor...</div>`;
-      try {
-        const img = await fetchMedicalImage(query, capTopic, capCat);
-        if (!noteRef.current?.contains(el)) return;
-        if (img) {
-          el.innerHTML = `<figure class="inline-note-img">
-            <img src="${img.url}" alt="${img.caption}" loading="eager" />
-            <figcaption>${img.caption}<span class="img-src"> — Wikipedia</span></figcaption>
-          </figure>`;
-        } else {
+    let cancelled = false;
+    const usedImageUrls = new Set<string>();
+    const imageSlots = placeholders.slice(0, 2);
+    placeholders.slice(2).forEach((el) => { el.style.display = "none"; });
+
+    void (async () => {
+      for (const el of imageSlots) {
+        const query = el.getAttribute("data-q");
+        if (!query) { el.style.display = "none"; continue; }
+        el.innerHTML = `<div class="nb-img-skeleton"><span class="spin2"></span>&nbsp;Görsel yükleniyor...</div>`;
+        try {
+          const img = await fetchMedicalImage(query, capTopic, capCat, [...usedImageUrls]);
+          if (cancelled || !noteRef.current?.contains(el)) return;
+          if (img && !usedImageUrls.has(img.url)) {
+            usedImageUrls.add(img.url);
+            el.innerHTML = `<figure class="inline-note-img">
+              <img src="${img.url}" alt="${img.caption}" loading="eager" />
+              <figcaption>${img.caption}<span class="img-src"> — Wikipedia</span></figcaption>
+            </figure>`;
+          } else {
+            el.style.display = "none";
+          }
+        } catch (_) {
           el.style.display = "none";
         }
-      } catch (_) {
-        el.style.display = "none";
       }
-    });
+    })();
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteHtml]);
 
@@ -463,7 +473,7 @@ CSS SINIFLARI:
 • ed-arrow — dikey aşağı ok (BOŞ)  |  ed-arrow-h — yatay sağ ok (BOŞ)
 • ed-lbl — ok üstündeki geçiş etiketi (neden/koşul) (BOŞ değil — içine metin yaz)
 • ed-split + ed-split-branch — karar noktasından iki kola ayrılma
-• ed-compare + ed-compare-col + ed-vs — iki tipi yan yana karşılaştır
+• ed-compare + ed-compare-col — 2-4 tipi eşit genişlikli sütunlarda karşılaştır. ed-vs kullanma; sütunların arasına VS yazısı veya ok koyma.
 
 TİP 1 — Patofizyoloji Akışı (etiketli oklar + alt bilgi):
 <div class="edu-diagram">
@@ -529,7 +539,6 @@ TİP 3 — Karşılaştırma (iki tip/form yan yana):
         <div class="ed-node ed-teal">Tedavi<div class="ed-sub">ilaç + doz</div></div>
         <div class="ed-node ed-purple">Prognoz<div class="ed-sub">%mortalite</div></div>
       </div>
-      <div class="ed-vs">VS</div>
       <div class="ed-compare-col">
         <div class="ed-node ed-blue">Tip B / Form 2<div class="ed-sub">sıklık, yaş</div></div>
         <div class="ed-node ed-orange">Mekanizma<div class="ed-sub">patofizyo</div></div>
@@ -540,6 +549,12 @@ TİP 3 — Karşılaştırma (iki tip/form yan yana):
     </div>
   </div>
 </div>
+
+KARŞILAŞTIRMA KURALLARI:
+• Her hastalık/tip yalnızca bir ed-compare-col içinde yer alsın; üçüncü veya dördüncü seçenek yeni ve eşit bir sütun olsun.
+• Bütün sütunlarda aynı bilgi sırasını kullan: Tanım → Ayırt ettiren bulgu → Tanı → Tedavi.
+• Bir sütunu diğerinin altına veya ortasına yerleştirme. ed-compare içine ed-arrow, ed-arrow-h, ed-vs ya da serbest metin koyma.
+• Aynı karşılaştırmada en fazla 4 sütun ve sütun başına en fazla 4 kutu kullan. Daha fazla bilgi gerekiyorsa tablo kullan.
 
 TİP 4 — Tedavi Basamakları (başarısızlık koşullu):
 <div class="edu-diagram">

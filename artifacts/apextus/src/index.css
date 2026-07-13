@@ -1488,15 +1488,26 @@ body {
 /* Two-column comparison grid */
 .edu-diagram .ed-compare {
   display: grid;
-  grid-template-columns: 1fr 22px 1fr;
-  gap: 6px;
-  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  align-items: stretch;
   width: 100%;
 }
 .edu-diagram .ed-compare-col {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  background: #f6f7fb;
+  border: 1px solid #dedce8;
+  border-radius: 8px;
+}
+.edu-diagram .ed-compare-col .ed-node {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* ===== APEXTUS LEARNING PLATFORM 2026 ===== */
@@ -1546,16 +1557,12 @@ button, input, select, textarea { font-family: inherit; letter-spacing: 0; }
 @media (max-width: 900px) { .app-workspace { padding-left:0; }.app-sidebar { transform:translateX(-100%); box-shadow:14px 0 40px rgba(32,25,70,.12); }.app-sidebar.open { transform:translateX(0); }.sidebar-backdrop { display:block; position:fixed; inset:0; z-index:60; border:0; background:rgba(24,22,36,.3); }.topbar-menu { display:grid; place-items:center; }.app-topbar { padding:0 18px; }.app-main { padding:22px 18px 50px; }.topbar-search { display:none; }.dashboard-columns { grid-template-columns:1fr; }.focus-cards { grid-template-columns:1fr; }.topbar-profile div { display:none; } }
 @media (max-width: 600px) { .ai-coach-chip { margin-left:auto; font-size:0; }.ai-coach-chip svg { margin:0; }.dashboard-heading { display:block; }.dashboard-heading > div:first-child { min-width:0; }.dashboard-heading > div:first-child > p:last-child { line-height:1.55; }.streak-pill { display:none; }.continue-card { align-items:flex-start; padding:22px; flex-wrap:wrap; }.continue-icon { width:44px; height:44px; }.continue-copy { min-width:calc(100% - 65px); }.continue-button { width:100%; justify-content:center; }.task-time { display:none; }.task-list button > svg { flex-shrink:0; }.focus-cards { grid-template-columns:1fr; } }
 .edu-diagram .ed-vs {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: .62rem;
-  font-weight: 900;
-  color: var(--ac);
-  padding-top: 8px;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  letter-spacing: .08em;
+  display: none !important;
+}
+
+@media (max-width: 560px) {
+  .edu-diagram .ed-compare { grid-template-columns: 1fr; }
+  .edu-diagram .ed-compare-col { padding: 8px; }
 }
 
 /* ── Plan table (MockExam study plan + TUS score) ───────────────── */
