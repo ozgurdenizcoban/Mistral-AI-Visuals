@@ -190,9 +190,16 @@ export default function Notes() {
 
     try {
       const html = await mistralText(buildNotePrompt(cat, topic), 8000, 0.35);
-      const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 3000, 0.4);
       const cleanHtml = curateMnemonics(cleanContent(html));
-      const cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
+      let cleanLink = "";
+      try {
+        const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 3000, 0.4);
+        cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
+      } catch (_) {
+        // The core note is valuable on its own. A supplemental section must
+        // never make an otherwise successful note generation fail.
+        toast.info("Ana konu notu hazırlandı; klinik bağlantılar daha sonra eklenebilir.");
+      }
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
       setNoteHtml(full);

@@ -6,7 +6,7 @@ import { addDays, toDay } from "@/lib/utils";
 
 const MAX_ENTRIES_PER_VOLUME = 18;
 const MAX_NOTE_CHARS = 18000;
-const AI_NOTE_TIMEOUT_MS = 120000;
+const AI_NOTE_TIMEOUT_MS = 210000;
 
 const PERSONAL_NOTE_STANDARD = `PROFESYONEL KONU NOTU STANDARDI:
 - ERISILEBILIRLIK KURALI: Metin ve arka plan her zaman yuksek kontrastli olsun. Acik zeminde koyu metin, koyu zeminde saf beyaz metin kullan; yakin tonlari ASLA birlikte kullanma.
@@ -226,8 +226,9 @@ export async function rebuildPersonalNoteVolume(state: AppState, noteId: string)
   let contentHtml = "";
   try {
     contentHtml = await buildAiLearningNoteFromEntries(note);
-  } catch (_) {
-    throw new Error("AI konu notu hazirlanamadi. Lutfen tekrar dene.");
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Bilinmeyen AI hatasi";
+    throw new Error("AI konu notu hazirlanamadi: " + reason);
   }
 
   notes[index] = {

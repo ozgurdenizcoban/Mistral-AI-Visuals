@@ -1,6 +1,6 @@
 const MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY as string;
 const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
-const REQUEST_TIMEOUT_MS = 75000;
+const REQUEST_TIMEOUT_MS = 180000;
 
 // Serializing queue — prevents concurrent calls from bypassing the rate limit
 let _queueTail: Promise<void> = Promise.resolve();
@@ -21,6 +21,10 @@ async function mistralCall(
   await new Promise((r) => setTimeout(r, 300));
 
   try {
+    if (!MISTRAL_API_KEY?.trim()) {
+      throw new Error("AI bağlantı anahtarı eksik. Site yöneticisine bildir.");
+    }
+
     const body: Record<string, unknown> = {
       model: "mistral-large-latest",
       messages: [{ role: "user", content: prompt }],
@@ -50,11 +54,20 @@ async function mistralCall(
       }
     }
 
-    let resp = await doFetch();
+    let resp: Response;
+    try {
+      resp = await doFetch();
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        throw new Error("AI yanıtı zaman aşımına uğradı. Lütfen yeniden dene.");
+      }
+      throw new Error("AI servisine bağlanılamadı. İnternet bağlantını kontrol edip yeniden dene.");
+    }
 
-    // Retry on 429 (rate limit) or 500 (transient server error)
-    if (resp.status === 429 || resp.status === 500) {
-      const wait = resp.status === 429 ? 8000 : 5000;
+    // Retry once when the provider is busy or temporarily unavailable.
+    if ([408, 429, 500, 502, 503, 504].includes(resp.status)) {
+      const retryAfter = Number(resp.headers.get("retry-after") || "0");
+      const wait = retryAfter > 0 ? Math.min(retryAfter * 1000, 15000) : (resp.status === 429 ? 8000 : 4000);
       await new Promise((r) => setTimeout(r, wait));
       resp = await doFetch();
     }
@@ -65,6 +78,9 @@ async function mistralCall(
         const ed = await resp.json();
         et = ed?.message || ed?.error?.message || et;
       } catch (_) {}
+      if (resp.status === 401 || resp.status === 403) et = "AI erişim anahtarı geçersiz veya yetkisiz.";
+      if (resp.status === 402) et = "Mistral kullanım bakiyesi yetersiz.";
+      if (resp.status === 429) et = "AI kullanım sınırına ulaşıldı. Bir dakika sonra yeniden dene.";
       throw new Error(et);
     }
 
