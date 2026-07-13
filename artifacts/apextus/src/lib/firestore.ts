@@ -11,6 +11,7 @@ export interface NoteDoc {
   topic: string;
   createdAt: number;
   images?: { url: string; caption: string }[];
+  schemaVersion?: number;
 }
 
 export async function fbGetNote(topic: string): Promise<NoteDoc | null> {
@@ -28,10 +29,11 @@ export async function fbSaveNote(
   topic: string,
   html: string,
   linkHtml: string,
-  images?: { url: string; caption: string }[]
+  images?: { url: string; caption: string }[],
+  schemaVersion = 1,
 ): Promise<void> {
   try {
-    const data: NoteDoc = { html, linkHtml: linkHtml || "", topic, createdAt: Date.now() };
+    const data: NoteDoc = { html, linkHtml: linkHtml || "", topic, createdAt: Date.now(), schemaVersion };
     if (images?.length) data.images = images;
     await setDoc(doc(db, "notes", topicKey(topic)), data);
   } catch (e) {

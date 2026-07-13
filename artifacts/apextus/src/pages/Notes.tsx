@@ -5,10 +5,12 @@ import { mistralCompleteText, mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
 import { fetchMedicalImage, getTopicDiagramQuery } from "@/lib/imageGen";
 import { getSourceGuide } from "@/lib/sourceGuides";
+import { getMandatoryNoteAnchors, getNoteCoverageContract } from "@/lib/noteCoverage";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
 const noteCache: Record<string, string> = {};
+const NOTE_SCHEMA_VERSION = 2;
 
 interface PreparedNote {
   html: string;
@@ -58,9 +60,23 @@ function prepareNoteContent(rawHtml: string): PreparedNote {
   const textLength = (doc.body.textContent || "").replace(/\s+/g, " ").trim().length;
   return {
     html: doc.body.innerHTML.trim(),
-    isComplete: !hasUnclosedStructure && headings >= 10 && hasClosingSections && textLength >= 2500,
+    isComplete: !hasUnclosedStructure && headings >= 10 && hasClosingSections && textLength >= 9000,
     removedDiagrams,
   };
+}
+
+function findMissingCoverageAnchors(html: string, anchors: string[]) {
+  const normalize = (value: string) => value
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const haystack = normalize(new DOMParser().parseFromString(html, "text/html").body.textContent || "");
+  return anchors.filter((anchor) => {
+    const key = normalize(anchor.split(/[:(]/)[0]);
+    return key.length > 3 && !haystack.includes(key);
+  });
 }
 
 function shouldAlwaysShowReferenceImages(cat: string) {
@@ -80,6 +96,7 @@ export default function Notes() {
   const [activeTopic, setActiveTopic] = useState<{ cat: string; icon: string; topic: string } | null>(noteTarget ?? null);
   const [noteHtml, setNoteHtml] = useState<string | null>(null);
   const [noteLoading, setNoteLoading] = useState(false);
+  const [noteStage, setNoteStage] = useState("Kapsam hazırlanıyor");
   const [studyAdd, setStudyAdd] = useState(1);
 
   const noteRef = useRef<HTMLDivElement>(null);
@@ -227,12 +244,13 @@ export default function Notes() {
       return;
     }
     setNoteLoading(true);
+    setNoteStage("Kapsam hazırlanıyor");
     setNoteHtml(null);
     srMarkRead(topic);
 
     try {
       const cached = await fbGetNote(topic);
-      if (cached?.html) {
+      if (cached?.html && (cached.schemaVersion || 0) >= NOTE_SCHEMA_VERSION) {
         const prepared = prepareNoteContent(cached.html);
         if (prepared.isComplete) {
           const full = buildNoteHtml(cat, topic, curateMnemonics(prepared.html), cached.linkHtml || "");
@@ -246,12 +264,23 @@ export default function Notes() {
     } catch (_) {}
 
     try {
-      const html = await mistralCompleteText(buildNotePrompt(cat, topic), 16000, 0.28);
+      setNoteStage("Temel bilgiler, mekanizma ve klinik yazılıyor (1/2)");
+      const firstHalf = await mistralCompleteText(buildNotePrompt(cat, topic, 1), 14000, 0.22);
+      setNoteStage("Tanı, tedavi ve TUS ayrıntıları yazılıyor (2/2)");
+      const secondHalf = await mistralCompleteText(buildNotePrompt(cat, topic, 2), 14000, 0.22);
+      let html = `${cleanContent(firstHalf)}\n${cleanContent(secondHalf)}`;
+      const missingAnchors = findMissingCoverageAnchors(html, getMandatoryNoteAnchors(cat, topic));
+      if (missingAnchors.length) {
+        setNoteStage(`${missingAnchors.length} eksik alt başlık tamamlanıyor`);
+        const supplement = await mistralCompleteText(buildCoverageSupplementPrompt(cat, topic, missingAnchors), 8000, 0.18);
+        html += `\n${cleanContent(supplement)}`;
+      }
       const prepared = prepareNoteContent(html);
       if (!prepared.isComplete) throw new Error("Konu notu tamamlanmadan yanıt kesildi. Eksik içerik kaydedilmedi; yeniden dene.");
       const cleanHtml = curateMnemonics(prepared.html);
       let cleanLink = "";
       try {
+        setNoteStage("Klinik bağlantılar tamamlanıyor");
         const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 3000, 0.4);
         cleanLink = `<h2>Klinik Bağlantı Notları</h2>${cleanContent(linkHtml)}`;
       } catch (_) {
@@ -263,12 +292,13 @@ export default function Notes() {
       noteCache[topic] = full;
       setNoteHtml(full);
       toast.success(`${topic} notu yüklendi`);
-      fbSaveNote(topic, cleanHtml, cleanLink, []).catch(() => {});
+      fbSaveNote(topic, cleanHtml, cleanLink, [], NOTE_SCHEMA_VERSION).catch(() => {});
     } catch (e) {
       toast.error("Not yüklenemedi: " + (e as Error).message);
       setNoteHtml(`<div style="color:var(--ac)">Yükleme hatası: ${(e as Error).message}</div>`);
     } finally {
       setNoteLoading(false);
+      setNoteStage("Kapsam hazırlanıyor");
     }
   }
 
@@ -455,10 +485,10 @@ export default function Notes() {
                 <div className="loading-orb">📚</div>
                 <div className="loading-title">{activeTopic.topic}</div>
                 <div style={{ color: "var(--teal)", fontSize: ".78rem", marginTop: 6, fontWeight: 600 }}>
-                  Not hazırlanıyor — yaklaşık 1–2 dakika<span className="loading-dots" />
+                  {noteStage}<span className="loading-dots" />
                 </div>
                 <div style={{ color: "var(--t2)", fontSize: ".72rem", marginTop: 4 }}>
-                  Mistral AI detaylı TUS içeriği üretiyor
+                  İki aşamalı ayrıntılı TUS fasikülü hazırlanıyor; birkaç dakika sürebilir
                 </div>
               </div>
             ) : noteHtml ? (
@@ -495,14 +525,32 @@ const PROFESSIONAL_NOTE_STANDARD = `PROFESYONEL NOT STANDARDI:
 - Karar agaclari metin cizimi degil, ogrencinin takip edebilecegi iki kollu secim diyagrami gibi tasarlansin.
 - Sayisal esikler, skorlar, dozlar, laboratuvar referanslari ve klasik bulgular atlanmasin.
 - Gereksiz genel kultur anlatimi yapma; sinavda puan getirecek bilgiye yogunlas.`;
-function buildNotePrompt(cat: string, topic: string): string {
+function buildNotePrompt(cat: string, topic: string, part: 1 | 2): string {
+  const requiredSections = part === 1
+    ? `<h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>
+<h2>2. Patofizyoloji</h2>
+<h2>3. Sınıflama ve Evreleme</h2>
+<h2>4. Klinik Bulgular</h2>
+<h2>5. Seroloji / Belirteçler (varsa)</h2>
+<h2>6. Tanı Kriterleri ve Algoritma</h2>`
+    : `<h2>7. Laboratuvar ve Görüntüleme</h2>
+<h2>8. Skorlama Sistemleri (varsa)</h2>
+<h2>9. Tedavi</h2>
+<h2>10. Komplikasyonlar ve Prognoz</h2>
+<h2>11. Ayırıcı Tanı</h2>
+<h2>12. TUS SPOTLARI ve KALICI İPUÇLARI</h2>
+<h2>13. Aktif Hatırlama ve Klinik Bağlantı Özeti</h2>`;
   return `Sen kıdemli bir TUS akademisyeni ve ders notu editörüsün. Aşağıdaki konu için TUS'ta çıkabilecek HİÇBİR BİLGİYİ ATLAMAMAK şartıyla tam, profesyonel ve kapsamlı bir konu notu hazırla.
 
 KONU: ${cat} — ${topic}
+BU İKİ AŞAMALI NOTUN ${part}. BÖLÜMÜDÜR. Yalnızca aşağıda istenen bölüm başlıklarını üret; diğer yarının başlıklarını tekrar etme.
+Bu yarım notta en fazla 1 diyagram kullan; ayrıntıyı kutulara sıkıştırmak yerine okunabilir paragraf, liste ve karşılaştırma tablolarıyla ver.
 
 ${PROFESSIONAL_NOTE_STANDARD}
 
 ${getSourceGuide(cat, topic)}
+
+${getNoteCoverageContract(cat, topic, part)}
 
 KESİN KURAL — ATLANAMAZ BİLGİLER:
 • Tam ilaç dozları (mg, yol, sıklık)
@@ -651,22 +699,29 @@ ZORUNLU KURALLAR:
 • Diyagram başlıkları konuya özel olsun ("PAT0FİZYOLOJİ — KALBİ YETMEZLİK" gibi)
 • Patofizyoloji, sınıflama ve tedavi konumlarından yalnızca konuyu en iyi öğreten iki tanesine uygun diyagram yerleştir
 
-ZORUNLU BÖLÜMLER:
-<h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>
-<h2>2. Patofizyoloji</h2>
-<h2>3. Sınıflama ve Evreleme</h2>
-<h2>4. Klinik Bulgular</h2>
-<h2>5. Seroloji / Belirteçler (varsa)</h2>
-<h2>6. Tanı Kriterleri ve Algoritma</h2>
-<h2>7. Laboratuvar ve Görüntüleme</h2>
-<h2>8. Skorlama Sistemleri</h2>
-<h2>9. Tedavi</h2>
-<h2>10. Komplikasyonlar ve Prognoz</h2>
-<h2>11. Ayırıcı Tanı</h2>
-<h2>12. TUS SPOTLARI ve KALICI İPUÇLARI</h2>
-<h2>13. KLİNİK BAĞLANTI NOTLARI</h2>
+BU AŞAMADA ÜRETİLECEK ZORUNLU BÖLÜMLER:
+${requiredSections}
+
+UZUNLUK VE DERİNLİK KURALI:
+- Bu yarım not en az 3500 kelime hedeflesin; konu daha genişse uzat.
+- Her zorunlu kapsam öğesini adıyla işle ve ayırt ettiren sınav bilgilerini yaz.
+- Kısa özet üretme. Bir TUS adayının başka ana kaynağa ihtiyaç duymadan tekrar yapabileceği fasikül ayrıntısında yaz.
+- Yanıtı son zorunlu bölüm tamamen kapanmadan bitirme.
 
 Şimdi başla:`;
+}
+
+function buildCoverageSupplementPrompt(cat: string, topic: string, missingAnchors: string[]) {
+  return `Sen kıdemli bir TUS ders kitabı editörüsün. Aşağıdaki konu notunun kapsam denetiminde eksik kalan alt başlıkları tamamla.
+
+DERS: ${cat}
+KONU: ${topic}
+EKSİK BAŞLIKLAR:
+${missingAnchors.map((anchor) => `- ${anchor}`).join("\n")}
+
+SADECE HTML döndür. <h2>14. Kapsam Tamamlama</h2> ile başla.
+Her eksik öğeyi ayrı <h3> başlığında ele al. Mikrobiyal etkenlerde morfoloji/boyanma, kültür-biyokimya, virülans/toksin, bulaş, klinik hastalıklar, tanı, ilk seçenek tedavi, direnç ve korunmayı yaz.
+Her başlık en az bir açıklayıcı paragraf, yüksek verimli madde listesi ve bir TUS ayırt ettirici ipucu içersin. "vb.", "diğerleri" veya yalnızca isim listesi kullanma. Diyagram ekleme. Markdown kullanma.`;
 }
 
 function buildLinkPrompt(cat: string, topic: string): string {
