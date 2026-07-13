@@ -10,7 +10,9 @@ import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
 const noteCache: Record<string, string> = {};
-const NOTE_SCHEMA_VERSION = 2;
+const notePartCache: Record<string, string[]> = {};
+const NOTE_SCHEMA_VERSION = 3;
+type NotePart = 1 | 2 | 3 | 4;
 
 interface PreparedNote {
   html: string;
@@ -264,11 +266,21 @@ export default function Notes() {
     } catch (_) {}
 
     try {
-      setNoteStage("Temel bilgiler, mekanizma ve klinik yazılıyor (1/2)");
-      const firstHalf = await mistralCompleteText(buildNotePrompt(cat, topic, 1), 14000, 0.22);
-      setNoteStage("Tanı, tedavi ve TUS ayrıntıları yazılıyor (2/2)");
-      const secondHalf = await mistralCompleteText(buildNotePrompt(cat, topic, 2), 14000, 0.22);
-      let html = `${cleanContent(firstHalf)}\n${cleanContent(secondHalf)}`;
+      const stageLabels = [
+        "Temel bilgiler ve mekanizma yazılıyor",
+        "Klinik bulgular ve tanı yazılıyor",
+        "Laboratuvar ve tedavi yazılıyor",
+        "Komplikasyonlar ve TUS ayrıntıları yazılıyor",
+      ];
+      const completedParts = notePartCache[topic] || [];
+      notePartCache[topic] = completedParts;
+      for (let index = completedParts.length; index < 4; index += 1) {
+        const part = (index + 1) as NotePart;
+        setNoteStage(`${stageLabels[index]} (${part}/4)`);
+        const generatedPart = await mistralCompleteText(buildNotePrompt(cat, topic, part), 6500, 0.2);
+        completedParts.push(cleanContent(generatedPart));
+      }
+      let html = completedParts.join("\n");
       const missingAnchors = findMissingCoverageAnchors(html, getMandatoryNoteAnchors(cat, topic));
       if (missingAnchors.length) {
         setNoteStage(`${missingAnchors.length} eksik alt başlık tamamlanıyor`);
@@ -290,12 +302,17 @@ export default function Notes() {
       }
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
+      delete notePartCache[topic];
       setNoteHtml(full);
       toast.success(`${topic} notu yüklendi`);
       fbSaveNote(topic, cleanHtml, cleanLink, [], NOTE_SCHEMA_VERSION).catch(() => {});
     } catch (e) {
-      toast.error("Not yüklenemedi: " + (e as Error).message);
-      setNoteHtml(`<div style="color:var(--ac)">Yükleme hatası: ${(e as Error).message}</div>`);
+      const savedParts = notePartCache[topic]?.length || 0;
+      const resumeMessage = savedParts
+        ? ` ${savedParts}/4 bölüm korundu; Yenile ile kaldığı yerden devam edebilirsin.`
+        : "";
+      toast.error("Not yüklenemedi: " + (e as Error).message + resumeMessage);
+      setNoteHtml(`<div class="warn"><strong>Hazırlama geçici olarak durdu.</strong> ${(e as Error).message}${resumeMessage}</div>`);
     } finally {
       setNoteLoading(false);
       setNoteStage("Kapsam hazırlanıyor");
@@ -488,7 +505,7 @@ export default function Notes() {
                   {noteStage}<span className="loading-dots" />
                 </div>
                 <div style={{ color: "var(--t2)", fontSize: ".72rem", marginTop: 4 }}>
-                  İki aşamalı ayrıntılı TUS fasikülü hazırlanıyor; birkaç dakika sürebilir
+                  Dört kısa aşamada ayrıntılı TUS fasikülü hazırlanıyor; tamamlanan bölümler korunur
                 </div>
               </div>
             ) : noteHtml ? (
@@ -525,26 +542,28 @@ const PROFESSIONAL_NOTE_STANDARD = `PROFESYONEL NOT STANDARDI:
 - Karar agaclari metin cizimi degil, ogrencinin takip edebilecegi iki kollu secim diyagrami gibi tasarlansin.
 - Sayisal esikler, skorlar, dozlar, laboratuvar referanslari ve klasik bulgular atlanmasin.
 - Gereksiz genel kultur anlatimi yapma; sinavda puan getirecek bilgiye yogunlas.`;
-function buildNotePrompt(cat: string, topic: string, part: 1 | 2): string {
-  const requiredSections = part === 1
-    ? `<h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>
+function buildNotePrompt(cat: string, topic: string, part: NotePart): string {
+  const sectionsByPart: Record<NotePart, string> = {
+    1: `<h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>
 <h2>2. Patofizyoloji</h2>
-<h2>3. Sınıflama ve Evreleme</h2>
-<h2>4. Klinik Bulgular</h2>
+<h2>3. Sınıflama ve Evreleme</h2>`,
+    2: `<h2>4. Klinik Bulgular</h2>
 <h2>5. Seroloji / Belirteçler (varsa)</h2>
-<h2>6. Tanı Kriterleri ve Algoritma</h2>`
-    : `<h2>7. Laboratuvar ve Görüntüleme</h2>
+<h2>6. Tanı Kriterleri ve Algoritma</h2>`,
+    3: `<h2>7. Laboratuvar ve Görüntüleme</h2>
 <h2>8. Skorlama Sistemleri (varsa)</h2>
-<h2>9. Tedavi</h2>
-<h2>10. Komplikasyonlar ve Prognoz</h2>
+<h2>9. Tedavi</h2>`,
+    4: `<h2>10. Komplikasyonlar ve Prognoz</h2>
 <h2>11. Ayırıcı Tanı</h2>
 <h2>12. TUS SPOTLARI ve KALICI İPUÇLARI</h2>
-<h2>13. Aktif Hatırlama ve Klinik Bağlantı Özeti</h2>`;
+<h2>13. Aktif Hatırlama ve Klinik Bağlantı Özeti</h2>`,
+  };
+  const requiredSections = sectionsByPart[part];
   return `Sen kıdemli bir TUS akademisyeni ve ders notu editörüsün. Aşağıdaki konu için TUS'ta çıkabilecek HİÇBİR BİLGİYİ ATLAMAMAK şartıyla tam, profesyonel ve kapsamlı bir konu notu hazırla.
 
 KONU: ${cat} — ${topic}
-BU İKİ AŞAMALI NOTUN ${part}. BÖLÜMÜDÜR. Yalnızca aşağıda istenen bölüm başlıklarını üret; diğer yarının başlıklarını tekrar etme.
-Bu yarım notta en fazla 1 diyagram kullan; ayrıntıyı kutulara sıkıştırmak yerine okunabilir paragraf, liste ve karşılaştırma tablolarıyla ver.
+BU DÖRT AŞAMALI NOTUN ${part}. BÖLÜMÜDÜR. Yalnızca aşağıda istenen bölüm başlıklarını üret; diğer bölümlerin başlıklarını tekrar etme.
+Bu bölümde en fazla 1 diyagram kullan; ayrıntıyı kutulara sıkıştırmak yerine okunabilir paragraf, liste ve karşılaştırma tablolarıyla ver.
 
 ${PROFESSIONAL_NOTE_STANDARD}
 
@@ -703,7 +722,7 @@ BU AŞAMADA ÜRETİLECEK ZORUNLU BÖLÜMLER:
 ${requiredSections}
 
 UZUNLUK VE DERİNLİK KURALI:
-- Bu yarım not en az 3500 kelime hedeflesin; konu daha genişse uzat.
+- Bu bölüm 1200-1800 kelime arasında olsun; konuyu özetlemeden ayrıntılı işle.
 - Her zorunlu kapsam öğesini adıyla işle ve ayırt ettiren sınav bilgilerini yaz.
 - Kısa özet üretme. Bir TUS adayının başka ana kaynağa ihtiyaç duymadan tekrar yapabileceği fasikül ayrıntısında yaz.
 - Yanıtı son zorunlu bölüm tamamen kapanmadan bitirme.

@@ -69,11 +69,15 @@ function subjectContract(cat: string) {
   return "Tanım ve epidemiyolojiden başlayıp mekanizma, sınıflama, klinik, tanı, ayırıcı tanı, tedavi, izlem, komplikasyon ve prognozu kılavuz mantığında eksiksiz işle.";
 }
 
-export function getNoteCoverageContract(cat: string, topic: string, part: 1 | 2) {
+export function getNoteCoverageContract(cat: string, topic: string, part: 1 | 2 | 3 | 4) {
   const anchors = cat === "Mikrobiyoloji" ? MICROBIOLOGY_ANCHORS[topic] || [] : [];
-  const focus = part === 1
-    ? "Bu bölümde her başlığın temel özelliklerini, mekanizmasını, sınıflamasını, epidemiyolojisini ve klinik tablosunu ayrıntılandır."
-    : "Bu bölümde aynı kapsamın laboratuvar tanısını, ayırıcı tanısını, tedavisini, direncini/kontrendikasyonunu, korunmasını, komplikasyonlarını ve TUS tuzaklarını ayrıntılandır.";
+  const focusByPart = {
+    1: "Bu bölümde temel özellikleri, etiyolojiyi, mekanizmayı, epidemiyolojiyi ve sınıflamayı ayrıntılandır.",
+    2: "Bu bölümde klinik tabloları, seroloji/belirteçleri ve tanı algoritmalarını ayrıntılandır.",
+    3: "Bu bölümde laboratuvar-görüntüleme, skorlar ve tüm tedavi seçeneklerini ayrıntılandır.",
+    4: "Bu bölümde komplikasyon, prognoz, ayırıcı tanı, TUS tuzakları ve aktif hatırlamayı ayrıntılandır.",
+  } as const;
+  const focus = focusByPart[part];
   const anchorText = anchors.length
     ? `\nKONUYA ÖZEL ZORUNLU KAPSAM (${anchors.length} öğe):\n${anchors.map((item) => `- ${item}`).join("\n")}\nBu listedeki hiçbir öğeyi "vb." diyerek geçme. Her birinin adı ve ayırt ettiren en az 3 sınav bilgisi açıkça yer alsın.`
     : "";

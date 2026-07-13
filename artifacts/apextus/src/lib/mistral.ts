@@ -1,6 +1,6 @@
 const MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY as string;
 const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
-const REQUEST_TIMEOUT_MS = 180000;
+const REQUEST_TIMEOUT_MS = 240000;
 
 // Serializing queue — prevents concurrent calls from bypassing the rate limit
 let _queueTail: Promise<void> = Promise.resolve();
