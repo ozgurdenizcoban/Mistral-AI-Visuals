@@ -9,7 +9,8 @@ async function mistralCall(
   prompt: string,
   maxTokens = 8000,
   temp = 0.7,
-  jsonMode = false
+  jsonMode = false,
+  requireComplete = false,
 ): Promise<string> {
   let releaseSlot!: () => void;
   const mySlot = new Promise<void>((resolve) => { releaseSlot = resolve; });
@@ -87,6 +88,9 @@ async function mistralCall(
     const data = await resp.json();
     const content = data?.choices?.[0]?.message?.content;
     if (!content || content.trim().length < 5) throw new Error("Boş yanıt");
+    if (requireComplete && data?.choices?.[0]?.finish_reason === "length") {
+      throw new Error("AI yanıtı yarıda kaldı. Not eksik kaydedilmedi; lütfen yeniden dene.");
+    }
     return content.trim();
   } finally {
     releaseSlot();
@@ -95,6 +99,10 @@ async function mistralCall(
 
 export async function mistralText(prompt: string, maxTokens = 8000, temp = 0.7): Promise<string> {
   return mistralCall(prompt, maxTokens, temp, false);
+}
+
+export async function mistralCompleteText(prompt: string, maxTokens = 16000, temp = 0.35): Promise<string> {
+  return mistralCall(prompt, maxTokens, temp, false, true);
 }
 
 export async function mistralJSON(prompt: string, maxTokens = 8000, temp = 0.7): Promise<string> {

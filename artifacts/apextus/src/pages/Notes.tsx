@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { TREE, LINK_MAP, SR_INTERVALS } from "@/lib/data";
-import { mistralText } from "@/lib/mistral";
+import { mistralCompleteText, mistralText } from "@/lib/mistral";
 import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
 import { fetchMedicalImage, getTopicDiagramQuery } from "@/lib/imageGen";
 import { getSourceGuide } from "@/lib/sourceGuides";
@@ -9,6 +9,59 @@ import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
 
 const noteCache: Record<string, string> = {};
+
+interface PreparedNote {
+  html: string;
+  isComplete: boolean;
+  removedDiagrams: number;
+}
+
+function prepareNoteContent(rawHtml: string): PreparedNote {
+  const stripped = rawHtml
+    .replace(/^```(?:html)?\s*/i, "")
+    .replace(/\s*```\s*$/, "")
+    .trim()
+    .replace(/\\n/g, "")
+    .replace(/\\t/g, " ");
+  const countTag = (tag: string, closing = false) =>
+    (stripped.match(new RegExp(`<${closing ? "/" : ""}${tag}(?:\\s[^>]*)?>`, "gi")) || []).length;
+  const hasUnclosedStructure = ["div", "table", "tbody", "tr", "ul", "ol"]
+    .some((tag) => countTag(tag) > countTag(tag, true));
+
+  const doc = new DOMParser().parseFromString(stripped, "text/html");
+  doc.querySelectorAll("script, style, iframe, object, embed").forEach((node) => node.remove());
+  let removedDiagrams = 0;
+  doc.querySelectorAll<HTMLElement>(".edu-diagram").forEach((diagram) => {
+    diagram.querySelectorAll<HTMLElement>("*").forEach((node) => {
+      node.removeAttribute("style");
+      Array.from(node.attributes).forEach((attribute) => {
+        if (attribute.name.toLowerCase().startsWith("on")) node.removeAttribute(attribute.name);
+      });
+    });
+    const title = diagram.querySelector(".ed-title")?.textContent?.trim() || "";
+    const nodes = Array.from(diagram.querySelectorAll<HTMLElement>(".ed-node"));
+    const hasBrokenNode = nodes.some((node) => {
+      const text = (node.textContent || "").replace(/\s+/g, " ").trim();
+      return text.length < 5 || /^\d+[.):]?$/.test(text) || /\[[^\]]+\]/.test(text);
+    });
+    if (title.length < 5 || nodes.length < 2 || hasBrokenNode) {
+      diagram.remove();
+      removedDiagrams += 1;
+    }
+  });
+
+  const headingTexts = Array.from(doc.querySelectorAll("h2"))
+    .map((heading) => (heading.textContent || "").replace(/\s+/g, " ").trim());
+  const headings = headingTexts.length;
+  const hasClosingSections = headingTexts.some((heading) => /^11[.)\s]/.test(heading) || /Ayırıcı Tanı/i.test(heading))
+    && headingTexts.some((heading) => /^12[.)\s]/.test(heading) || /TUS SPOTLARI/i.test(heading));
+  const textLength = (doc.body.textContent || "").replace(/\s+/g, " ").trim().length;
+  return {
+    html: doc.body.innerHTML.trim(),
+    isComplete: !hasUnclosedStructure && headings >= 10 && hasClosingSections && textLength >= 2500,
+    removedDiagrams,
+  };
+}
 
 function shouldAlwaysShowReferenceImages(cat: string) {
   return [
@@ -180,17 +233,23 @@ export default function Notes() {
     try {
       const cached = await fbGetNote(topic);
       if (cached?.html) {
-        const full = buildNoteHtml(cat, topic, curateMnemonics(cached.html), cached.linkHtml || "");
-        noteCache[topic] = full;
-        setNoteHtml(full);
-        setNoteLoading(false);
-        return;
+        const prepared = prepareNoteContent(cached.html);
+        if (prepared.isComplete) {
+          const full = buildNoteHtml(cat, topic, curateMnemonics(prepared.html), cached.linkHtml || "");
+          noteCache[topic] = full;
+          setNoteHtml(full);
+          setNoteLoading(false);
+          return;
+        }
+        await fbDeleteNote(topic);
       }
     } catch (_) {}
 
     try {
-      const html = await mistralText(buildNotePrompt(cat, topic), 8000, 0.35);
-      const cleanHtml = curateMnemonics(cleanContent(html));
+      const html = await mistralCompleteText(buildNotePrompt(cat, topic), 16000, 0.28);
+      const prepared = prepareNoteContent(html);
+      if (!prepared.isComplete) throw new Error("Konu notu tamamlanmadan yanıt kesildi. Eksik içerik kaydedilmedi; yeniden dene.");
+      const cleanHtml = curateMnemonics(prepared.html);
       let cleanLink = "";
       try {
         const linkHtml = await mistralText(buildLinkPrompt(cat, topic), 3000, 0.4);
@@ -469,8 +528,8 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - Her mnemonicten sonra neden işe yaradığını tek cümlede açıkla. Açık eşleştirme listesini kuramıyorsan mnemonic ekleme; bilgiyi normal TUS spotu olarak yaz.
 - <div class="score-box"><div class="score-title">SKOR</div>...</div>
 
-GÖRSEL DİYAGRAM KURALI (ZORUNLU — EN ÖNEMLİ KURAL):
-Her konuda 3 adet DETAYLI, RENKLI HTML diyagrami uret. Dis gorsel KULLANMA - saf HTML/CSS. Karar agaci mutlaka ed-split + ed-split-branch yapisiyla iki kola ayrilsin.
+GÖRSEL DİYAGRAM KURALI:
+En fazla 2 adet sade ve öğretici HTML diyagramı üret. Yalnızca algoritma veya karşılaştırma metinden daha anlaşılır olacaksa diyagram kullan; sırf renkli görünmesi için diyagram ekleme. Karar ağacı gerekiyorsa ed-split + ed-split-branch yapısıyla iki kola ayrılsın.
 
 CSS SINIFLARI:
 • ed-node ed-[renk] — kutucuk (içine ed-sub ekleyerek alt bilgi ekle)
@@ -583,14 +642,14 @@ TİP 4 — Tedavi Basamakları (başarısızlık koşullu):
   </div>
 </div>
 
-RENK KODLARI: ed-red=kritik/etken/acil | ed-orange=mekanizma/uyarı | ed-gold=tanı/bulgular | ed-teal=tedavi/çözüm/iyi | ed-blue=klinik/semptom | ed-purple=komplikasyon/acil | ed-green=iyi prognoz | ed-gray=nötr/başlangıç
+SEMANTİK SINIFLAR: ed-red yalnızca kritik/acil | ed-orange veya ed-gold uyarı ve eşik | ed-teal veya ed-green tedavi/olumlu sonuç | ed-blue veya ed-purple klinik ve anahtar bilgi | ed-gray nötr/başlangıç. Aynı diyagramda en fazla 3 renk ailesi kullan.
 ZORUNLU KURALLAR:
 • ed-arrow / ed-arrow-h icleri BOS kalir (metin yazma); ed-lbl icine kisa kosul/etiket yaz.
 • Karar agaci icin <div class="flowchart">, <pre>, <code>, "├", "└", "|" karakterleri ve monospace metin agaci kullanma.
 • Her ed-node içine gerçek klinik değerler yaz (ilaç adı+doz, sayısal eşik, yüzde oran)
 • ed-sub kullanarak her kutucuğa alt bilgi ekle — soyut etiket YAZMA ("Mekanizma" değil "ACE inhibitörü → bradikinin↑")
 • Diyagram başlıkları konuya özel olsun ("PAT0FİZYOLOJİ — KALBİ YETMEZLİK" gibi)
-• Patofizyoloji h2'sinin hemen altına TİP 1 | Sınıflama/Evreleme h2'sinin altına TİP 2 veya TİP 3 | Tedavi h2'sinin altına TİP 4 yerleştir
+• Patofizyoloji, sınıflama ve tedavi konumlarından yalnızca konuyu en iyi öğreten iki tanesine uygun diyagram yerleştir
 
 ZORUNLU BÖLÜMLER:
 <h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>

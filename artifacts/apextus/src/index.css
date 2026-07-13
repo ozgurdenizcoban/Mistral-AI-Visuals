@@ -1830,6 +1830,66 @@ button, input, select, textarea { font-family: inherit; letter-spacing: 0; }
 .edu-diagram [style*="background: rgb(0"] *,
 .edu-diagram [style*="background:rgb(0"] * { color:#202132 !important; }
 
+/* Calm clinical palette: semantic emphasis without saturated rainbow blocks. */
+.edu-diagram {
+  background: #f8fafc !important;
+  border-color: #dbe2ea !important;
+  padding: 22px !important;
+}
+.edu-diagram .ed-title {
+  color: #172033 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: .88rem !important;
+  border-bottom-color: #dbe2ea !important;
+}
+.edu-diagram .ed-node {
+  background: #ffffff !important;
+  color: #243047 !important;
+  border: 1px solid #d8e0e9 !important;
+  border-left: 4px solid #64748b !important;
+  box-shadow: 0 4px 12px rgba(15,23,42,.06) !important;
+}
+.edu-diagram .ed-node *,
+.edu-diagram .ed-sub { color: #475569 !important; }
+.edu-diagram .ed-red {
+  background: #fff5f5 !important; color: #881f2b !important;
+  border-color: #f1c5ca !important; border-left-color: #c2414d !important;
+}
+.edu-diagram .ed-red *, .edu-diagram .ed-red .ed-sub { color: #881f2b !important; }
+.edu-diagram .ed-orange, .edu-diagram .ed-gold {
+  background: #fffbeb !important; color: #77480b !important;
+  border-color: #ecd69a !important; border-left-color: #c58a20 !important;
+}
+.edu-diagram .ed-orange *, .edu-diagram .ed-gold *,
+.edu-diagram .ed-orange .ed-sub, .edu-diagram .ed-gold .ed-sub { color: #77480b !important; }
+.edu-diagram .ed-teal, .edu-diagram .ed-green {
+  background: #effaf7 !important; color: #075e50 !important;
+  border-color: #b9dfd5 !important; border-left-color: #16856f !important;
+}
+.edu-diagram .ed-teal *, .edu-diagram .ed-green *,
+.edu-diagram .ed-teal .ed-sub, .edu-diagram .ed-green .ed-sub { color: #075e50 !important; }
+.edu-diagram .ed-blue, .edu-diagram .ed-purple {
+  background: #f3f4fb !important; color: #373b78 !important;
+  border-color: #ced2eb !important; border-left-color: #5961a8 !important;
+}
+.edu-diagram .ed-blue *, .edu-diagram .ed-purple *,
+.edu-diagram .ed-blue .ed-sub, .edu-diagram .ed-purple .ed-sub { color: #373b78 !important; }
+.edu-diagram .ed-gray, .edu-diagram .ed-dark {
+  background: #f8fafc !important; color: #334155 !important;
+  border-color: #d8e0e9 !important; border-left-color: #64748b !important;
+}
+.edu-diagram .ed-gray *, .edu-diagram .ed-dark *,
+.edu-diagram .ed-gray .ed-sub, .edu-diagram .ed-dark .ed-sub { color: #475569 !important; }
+.edu-diagram .ed-arrow::before,
+.edu-diagram .ed-arrow-h::before { background: #64748b !important; }
+.edu-diagram .ed-arrow::after { border-top-color: #64748b !important; }
+.edu-diagram .ed-arrow-h::after { border-left-color: #64748b !important; }
+.edu-diagram .ed-lbl {
+  background: #ffffff !important; color: #334155 !important;
+  border-color: #cbd5e1 !important; border-radius: 5px !important;
+}
+
 /* Stronger accessible text tokens used by every non-diagram screen. */
 :root {
   --ac:#5b3fc0;
