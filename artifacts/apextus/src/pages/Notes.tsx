@@ -8,6 +8,7 @@ import { getSourceGuide } from "@/lib/sourceGuides";
 import { getMandatoryNoteAnchors, getNoteCoverageContract, NoteGenerationPart } from "@/lib/noteCoverage";
 import { toDay, addDays } from "@/lib/utils";
 import { toast } from "sonner";
+import { Maximize2, X } from "lucide-react";
 
 const noteCache: Record<string, string> = {};
 const notePartCache: Record<string, string[]> = {};
@@ -92,6 +93,21 @@ function prepareNoteContent(rawHtml: string): PreparedNote {
   };
 }
 
+function prepareNoteForReading(rawHtml: string) {
+  const doc = new DOMParser().parseFromString(rawHtml, "text/html");
+  doc.querySelectorAll("table").forEach((table) => {
+    table.removeAttribute("width");
+    table.querySelectorAll("th, td").forEach((cell) => cell.removeAttribute("width"));
+    if (!table.parentElement?.classList.contains("note-table-scroll")) {
+      const wrapper = doc.createElement("div");
+      wrapper.className = "note-table-scroll";
+      table.parentNode?.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    }
+  });
+  return doc.body.innerHTML;
+}
+
 function findMissingCoverageAnchors(html: string, anchors: string[]) {
   const normalize = (value: string) => value
     .toLocaleLowerCase("tr-TR")
@@ -125,11 +141,26 @@ export default function Notes() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [noteStage, setNoteStage] = useState("Kapsam hazırlanıyor");
   const [studyAdd, setStudyAdd] = useState(1);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   const noteRef = useRef<HTMLDivElement>(null);
   const activeTopicRef = useRef<{ cat: string; icon: string; topic: string } | null>(null);
 
   useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
+
+  useEffect(() => {
+    if (!isFullScreen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsFullScreen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isFullScreen]);
 
   // Inject supplementary Wikipedia images. Anatomy-like subjects still need real reference visuals.
   useEffect(() => {
@@ -508,6 +539,11 @@ export default function Notes() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                  {noteHtml && !noteLoading && (
+                    <button className="btn btn-ghost sm" onClick={() => setIsFullScreen(true)} title="Notu tam ekranda oku">
+                      <Maximize2 size={14} /> Tam ekran
+                    </button>
+                  )}
                   <button className="btn btn-ghost sm" onClick={() => refreshNote(activeTopic.cat, activeTopic.icon, activeTopic.topic)} disabled={noteLoading}>
                     ↺ Yenile
                   </button>
@@ -545,12 +581,29 @@ export default function Notes() {
               </div>
             ) : noteHtml ? (
               <div className="card">
-                <div ref={noteRef} className="nb" dangerouslySetInnerHTML={{ __html: noteHtml }} />
+                <div ref={noteRef} className="nb" dangerouslySetInnerHTML={{ __html: prepareNoteForReading(noteHtml) }} />
               </div>
             ) : null}
           </div>
         )}
       </div>
+
+      {isFullScreen && noteHtml && activeTopic && (
+        <div className="topic-note-reader" role="dialog" aria-modal="true" aria-label={`${activeTopic.topic} konu notu`}>
+          <header className="topic-note-reader-header">
+            <div>
+              <span>{activeTopic.cat}</span>
+              <strong>{activeTopic.topic}</strong>
+            </div>
+            <button className="reader-close" onClick={() => setIsFullScreen(false)} title="Tam ekranı kapat" aria-label="Tam ekranı kapat">
+              <X size={20} />
+            </button>
+          </header>
+          <main className="topic-note-reader-scroll">
+            <article className="topic-note-reader-content nb" dangerouslySetInnerHTML={{ __html: prepareNoteForReading(noteHtml) }} />
+          </main>
+        </div>
+      )}
 
       <style>{`
         @media (max-width: 768px) {
