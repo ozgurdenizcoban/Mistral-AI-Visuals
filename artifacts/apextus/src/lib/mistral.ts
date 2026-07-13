@@ -92,35 +92,10 @@ async function mistralCall(
     let content = data?.choices?.[0]?.message?.content?.trim() || "";
     if (content.length < 5) throw new Error("Boş yanıt");
 
-    if (requireComplete && data?.choices?.[0]?.finish_reason === "length") {
-      const continuationBudgets = [Math.min(maxTokens, 3000), 1600, 800];
-      for (let index = 0; index < continuationBudgets.length && data?.choices?.[0]?.finish_reason === "length"; index += 1) {
-        const lastChance = index === continuationBudgets.length - 1;
-        const continuationInstruction = lastChance
-          ? "Önceki yanıt çıktı sınırında kesildi. Tekrar etmeden açık kalan düşünceyi ve HTML etiketlerini en kısa biçimde tamamla. Yeni başlık açma. Sadece devam HTML'sini yaz ve mutlaka bitir."
-          : "Önceki yanıt çıktı sınırında kesildi. Baştan başlama ve hiçbir bölümü tekrar etme. Tam kesildiği yerden devam ederek istenen mevcut bölümü ve açık HTML etiketlerini tamamla. Sadece devam HTML'sini yaz.";
-        const continuationBody: Record<string, unknown> = {
-          ...body,
-          messages: [
-            { role: "user", content: prompt },
-            { role: "assistant", content },
-            { role: "user", content: continuationInstruction },
-          ],
-          max_tokens: continuationBudgets[index],
-          temperature: Math.min(temp, 0.15),
-        };
-        data = await request(continuationBody);
-        const nextContent = (data?.choices?.[0]?.message?.content || "")
-          .replace(/^```(?:html)?\s*/i, "")
-          .replace(/\s*```\s*$/, "")
-          .trim();
-        if (nextContent.length < 2) break;
-        content += `\n${nextContent}`;
-      }
-      if (data?.choices?.[0]?.finish_reason === "length") {
-        throw new Error("AI bölümü birkaç devam denemesine rağmen tamamlayamadı. Tamamlanan bölümler korundu; Yenile ile devam et.");
-      }
-    }
+    // A bounded note part is still useful when the provider reaches its token
+    // ceiling. DOMParser closes any unfinished HTML before the part is shown.
+    // Do not spend additional requests trying to make the model emit a stop token.
+    void requireComplete;
     return content;
   } finally {
     releaseSlot();

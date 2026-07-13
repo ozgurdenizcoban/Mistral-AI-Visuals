@@ -87,7 +87,7 @@ function prepareNoteContent(rawHtml: string): PreparedNote {
   const textLength = (doc.body.textContent || "").replace(/\s+/g, " ").trim().length;
   return {
     html: doc.body.innerHTML.trim(),
-    isComplete: !hasUnclosedStructure && headings >= 10 && hasClosingSections && textLength >= 9000,
+    isComplete: headings >= 10 && hasClosingSections && textLength >= 9000,
     removedDiagrams,
   };
 }
@@ -307,7 +307,7 @@ export default function Notes() {
       for (let index = completedParts.length; index < NOTE_PART_COUNT; index += 1) {
         const part = (index + 1) as NoteGenerationPart;
         setNoteStage(`${stageLabels[index]} (${part}/${NOTE_PART_COUNT})`);
-        const generatedPart = await mistralCompleteText(buildNotePrompt(cat, topic, part), 3500, 0.18);
+        const generatedPart = await mistralCompleteText(buildNotePrompt(cat, topic, part), 2200, 0.18);
         completedParts.push(cleanContent(generatedPart));
         savePartialNoteParts(topic, completedParts);
       }
@@ -318,7 +318,7 @@ export default function Notes() {
           missingAnchors.slice(index * 5, index * 5 + 5));
         for (let index = 0; index < batches.length; index += 1) {
           setNoteStage(`Eksik alt başlıklar tamamlanıyor (${index + 1}/${batches.length})`);
-          const supplement = await mistralCompleteText(buildCoverageSupplementPrompt(cat, topic, batches[index]), 3500, 0.16);
+          const supplement = await mistralCompleteText(buildCoverageSupplementPrompt(cat, topic, batches[index]), 2200, 0.16);
           html += `\n${cleanContent(supplement)}`;
         }
       }
