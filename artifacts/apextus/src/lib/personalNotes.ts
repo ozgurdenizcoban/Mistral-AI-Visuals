@@ -21,6 +21,9 @@ const PERSONAL_NOTE_STANDARD = `PROFESYONEL KONU NOTU STANDARDI:
 - En az 8 TUS spotu, 1 klinik vaka ornegi, 1 ayirici tani tablosu, 1 karar/tani algoritmasi, 1 yanlis tuzagi bolumu ve aktif hatirlama sorulari olsun.
 - Gereksiz genel kultur anlatimi yapma; sinavda puan getirecek bilgiye yogunlas.
 - Cikti normal not HTML'i gibi olsun: <h2>, <h3>, <p>, <ul>, <table>, <div class="tip">, <div class="warn">, <div class="algo">, <div class="mnem"> kullan.
+- Ogrencinin yanlis yaptigi kavrami kisa bir <mark>...</mark> ile vurgula; ayrintili uyariyi ayri bir <div class="warn"> blogunda anlat.
+- Vurgu etiketlerini metnin ustune bindirme. position, transform, float, negatif margin veya satir disina tasan rozet kullanma.
+- Bir liste maddesinin icine yan yana kutular yerlestirme; her bilgi blogu normal belge akisi icinde alt alta dursun.
 - Markdown kullanma. Sadece HTML parcalari dondur; <html>, <head>, <body> yazma.`;
 
 function clean(value?: string) {

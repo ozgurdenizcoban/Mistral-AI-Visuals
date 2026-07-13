@@ -1,10 +1,30 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { mistralText } from "@/lib/mistral";
 import { getPersonalNotesDue, markPersonalNoteStudied, rebuildPersonalNoteVolume } from "@/lib/personalNotes";
 import { getScoreSimulation } from "@/lib/studyInsights";
 import { toDay } from "@/lib/utils";
 import { toast } from "sonner";
+import { Maximize2, X } from "lucide-react";
+
+function preparePersonalNoteHtml(html: string) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("script, iframe, object, embed").forEach((node) => node.remove());
+  const highlightedSpans = new Set(
+    Array.from(doc.querySelectorAll<HTMLElement>("span")).filter((span) =>
+      !span.closest(".edu-diagram")
+      && (span.hasAttribute("style") || /highlight|badge|tag|pill|chip/i.test(span.className))
+    )
+  );
+  doc.querySelectorAll<HTMLElement>("*").forEach((node) => {
+    node.removeAttribute("style");
+    Array.from(node.attributes).forEach((attribute) => {
+      if (attribute.name.toLowerCase().startsWith("on")) node.removeAttribute(attribute.name);
+    });
+  });
+  highlightedSpans.forEach((span) => span.classList.add("note-inline-highlight"));
+  return doc.body.innerHTML;
+}
 
 export default function Review() {
   const { state, saveState, setCurrentPage } = useApp();
@@ -14,6 +34,7 @@ export default function Review() {
   const [hoursPerDay, setHoursPerDay] = useState(4);
   const [targetScore, setTargetScore] = useState(65);
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  const [fullScreenNoteId, setFullScreenNoteId] = useState<string | null>(null);
   const [noteLoadingId, setNoteLoadingId] = useState<string | null>(null);
 
   const today = toDay();
@@ -22,6 +43,21 @@ export default function Review() {
   const activeNotes = dueNotes.length ? dueNotes : personalNotes.slice(-1);
   const daysLeft = tusDate ? Math.max(1, Math.round((new Date(tusDate).getTime() - Date.now()) / 86400000)) : 90;
   const sim = getScoreSimulation(state, daysLeft, hoursPerDay, targetScore);
+  const fullScreenNote = personalNotes.find((note) => note.id === fullScreenNoteId);
+
+  useEffect(() => {
+    if (!fullScreenNoteId) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullScreenNoteId(null);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [fullScreenNoteId]);
 
   const weakSummary = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -127,12 +163,17 @@ HTML iskeleti:
                 {isPreparing ? "Yeniden yaziliyor..." : "Normal konu notu olarak yeniden yaz"}
               </button>
             )}
+            {hasUsableContent && (
+              <button className="btn btn-ghost sm" onClick={() => setFullScreenNoteId(note.id)} title="Notu tam ekranda oku">
+                <Maximize2 size={14} /> Tam ekran
+              </button>
+            )}
             <button className="btn btn-primary sm" onClick={() => markStudied(note.id)}>Tekrar ettim</button>
           </div>
         </div>
         {isOpen && (
           hasUsableContent
-            ? <div className="personal-note-body nb ai-topic-note" dangerouslySetInnerHTML={{ __html: note.contentHtml }} />
+            ? <div className="personal-note-body nb ai-topic-note" dangerouslySetInnerHTML={{ __html: preparePersonalNoteHtml(note.contentHtml) }} />
             : <div className="personal-note-body ai-topic-note">
                 <h3>Hataya ozel konu notu henuz hazir degil</h3>
                 <p>Bu ciltte yanlis kayitlari var; ancak ekrandaki eski icerik normal konu notu kalitesinde degil. <strong>Normal konu notu olarak yaz</strong> dugmesine bas; sistem yanlislarindan konuyu secip normal notlar sayfasindaki formatta sifirdan konu anlatimi hazirlayacak.</p>
@@ -212,6 +253,26 @@ HTML iskeleti:
       </section>
 
       {planHtml && <section className="panel plan-output" dangerouslySetInnerHTML={{ __html: planHtml }} />}
+
+      {fullScreenNote && (
+        <div className="personal-note-reader" role="dialog" aria-modal="true" aria-label={fullScreenNote.title}>
+          <header className="personal-note-reader-header">
+            <div>
+              <span>Kişisel tekrar notu</span>
+              <strong>{fullScreenNote.title}</strong>
+            </div>
+            <button className="reader-close" onClick={() => setFullScreenNoteId(null)} title="Tam ekranı kapat" aria-label="Tam ekranı kapat">
+              <X size={20} />
+            </button>
+          </header>
+          <main className="personal-note-reader-scroll">
+            <article
+              className="personal-note-reader-content personal-note-body nb ai-topic-note"
+              dangerouslySetInnerHTML={{ __html: preparePersonalNoteHtml(fullScreenNote.contentHtml) }}
+            />
+          </main>
+        </div>
+      )}
     </div>
   );
 }
