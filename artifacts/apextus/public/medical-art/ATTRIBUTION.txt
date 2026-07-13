@@ -1,0 +1,10 @@
+Servier Medical Art assets
+
+Image source: https://smart.servier.com/
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License text: https://creativecommons.org/licenses/by/4.0/
+Attribution: Image provided by Servier Medical Art.
+
+The images in this directory were exported from the official Servier Medical
+Art PowerPoint kits and converted to WebP for use in Apextus study notes and
+questions. The source presentations were not modified.

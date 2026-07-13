@@ -128,7 +128,7 @@ export default function Notes() {
             usedImageUrls.add(img.url);
             el.innerHTML = `<figure class="inline-note-img">
               <img src="${img.url}" alt="${img.caption}" loading="eager" />
-              <figcaption>${img.caption}<span class="img-src"> — Wikipedia</span></figcaption>
+              <figcaption>${img.caption}<span class="img-src"> — ${img.attribution}</span></figcaption>
             </figure>`;
           } else {
             el.style.display = "none";

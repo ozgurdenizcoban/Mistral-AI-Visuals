@@ -1,6 +1,10 @@
+import { findServierArt } from "@/lib/servierArt";
+
 export interface NoteImage {
   url: string;
   caption: string;
+  attribution: string;
+  sourceUrl?: string;
 }
 
 /* ── Wikipedia article → main thumbnail (single fast API call) ── */
@@ -28,7 +32,11 @@ async function fetchWikiImage(articleTitle: string): Promise<NoteImage | null> {
     if (!page) return null;
     const src = page.thumbnail?.source || page.original?.source;
     if (!src) return null;
-    return { url: src.replace(/\/\d+px-/, "/800px-"), caption: articleTitle };
+    return {
+      url: src.replace(/\/\d+px-/, "/800px-"),
+      caption: articleTitle,
+      attribution: "Wikipedia / Wikimedia Commons",
+    };
   } catch (_) { return null; }
 }
 
@@ -67,7 +75,11 @@ async function searchWikiImage(query: string, excludedUrls: Set<string>): Promis
       });
     const src = candidate?.thumbnail?.source;
     if (!src || !candidate?.title) return null;
-    return { url: src.replace(/\/\d+px-/, "/800px-"), caption: candidate.title };
+    return {
+      url: src.replace(/\/\d+px-/, "/800px-"),
+      caption: candidate.title,
+      attribution: "Wikipedia / Wikimedia Commons",
+    };
   } catch (_) {
     return null;
   }
@@ -93,6 +105,20 @@ export async function fetchMedicalImage(
   excludedImageUrls: string[] = [],
 ): Promise<NoteImage | null> {
   const excludedUrls = new Set(excludedImageUrls);
+  const servier = await findServierArt(
+    [topic, cat, query].filter(Boolean).join(" "),
+    "study",
+    excludedImageUrls,
+  );
+  if (servier) {
+    return {
+      url: servier.src,
+      caption: servier.title,
+      attribution: "Servier Medical Art (smart.servier.com) — CC BY 4.0",
+      sourceUrl: "https://smart.servier.com/",
+    };
+  }
+
   if (topic) {
     const media = TOPIC_MAP[topic];
     if (media) {
@@ -287,8 +313,17 @@ export async function generateNoteImages(cat: string, topic: string): Promise<No
 
 /** Return a single Wikipedia image for a quiz question topic.
  *  Only returns an image if the topic is explicitly in TOPIC_MAP — no generic fallbacks. */
-export async function getQuizImage(tags: string[]): Promise<NoteImage | null> {
+export async function getQuizImage(tags: string[], context = ""): Promise<NoteImage | null> {
   const topic = tags?.[0] || "";
+  const servier = await findServierArt(`${tags.join(" ")} ${context}`, "quiz");
+  if (servier) {
+    return {
+      url: servier.src,
+      caption: servier.title,
+      attribution: "Servier Medical Art (smart.servier.com) — CC BY 4.0",
+      sourceUrl: "https://smart.servier.com/",
+    };
+  }
   const media = TOPIC_MAP[topic];
   if (!media) return null;
 
@@ -311,7 +346,7 @@ export function buildImageHtml(images: NoteImage[]): string {
       (img) =>
         `<figure class="note-image-figure">
           <img src="${img.url}" alt="${img.caption}" class="note-image" loading="lazy" />
-          <figcaption class="note-image-caption">📖 ${img.caption} — Wikipedia / Wikimedia Commons</figcaption>
+          <figcaption class="note-image-caption">📖 ${img.caption} — ${img.attribution}</figcaption>
         </figure>`
     )
     .join("")}</div>`;

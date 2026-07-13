@@ -28,6 +28,24 @@ function shouldUseSourceImage(q: Q) {
   return /(anatomi|histoloji|embriyoloji|ekg|grafi|radyoloji|deri|lezyon|döküntü|hücre|kas|sinir|kalp|akciğer|böbrek|serebellum|damar|organ|görüntü|şekil)/i.test(text);
 }
 
+async function enrichQuestionsWithSourceImages(questions: Q[], requestedCount: number) {
+  let sourceImagesAdded = 0;
+  const sourceImageLimit = Math.max(1, Math.floor(requestedCount / 8));
+  for (const question of questions) {
+    if (sourceImagesAdded >= sourceImageLimit) break;
+    if (!shouldUseSourceImage(question) || /<img\s/i.test(question.visualHtml || "")) continue;
+    const image = await getQuizImage(
+      question.tags || [],
+      `${question.cat || ""} ${question.vaka || ""} ${question.soru || ""}`,
+    );
+    if (!image) continue;
+    question.visualHtml = cleanVisualHtml(buildQuizImageHtml(image));
+    question.visualCaption = `${image.caption} — ${image.attribution}`;
+    sourceImagesAdded += 1;
+  }
+  return questions;
+}
+
 export default function Quiz() {
   const { state, saveState, isPro, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
 
@@ -100,11 +118,12 @@ export default function Quiz() {
       const cachedKey = topic || activeCat;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
-        setQuestions(cached.slice(0, count).map((q) => ({
+        const cachedQuestions = cached.slice(0, count).map((q) => ({
           ...q,
           visualHtml: cleanVisualHtml(q.visualHtml),
           visualCaption: (q.visualCaption || "").slice(0, 120),
-        })));
+        }));
+        setQuestions(await enrichQuestionsWithSourceImages(cachedQuestions, count));
         markSeenQ(cached.map((q) => q._fid!).filter(Boolean));
         setLoading(false);
         if (timerMode) startTimer();
@@ -179,17 +198,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
 
       if (!qs.length) throw new Error("Sorular üretilemedi");
 
-      let sourceImagesAdded = 0;
-      const sourceImageLimit = Math.max(1, Math.floor(count / 8));
-      for (const question of qs) {
-        if (sourceImagesAdded >= sourceImageLimit) break;
-        if (question.visualHtml || !shouldUseSourceImage(question)) continue;
-        const image = await getQuizImage(question.tags || []);
-        if (!image) continue;
-        question.visualHtml = cleanVisualHtml(buildQuizImageHtml(image));
-        question.visualCaption = `${image.caption} - Wikipedia / Wikimedia Commons`;
-        sourceImagesAdded += 1;
-      }
+      await enrichQuestionsWithSourceImages(qs, count);
 
       setQuestions(qs);
       // Save and immediately mark as seen so they never repeat
