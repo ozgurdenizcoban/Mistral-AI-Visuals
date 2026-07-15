@@ -47,11 +47,17 @@ interface PreparedNote {
 }
 
 function repairBrokenPartBoundaries(rawHtml: string) {
-  return rawHtml.replace(
-    /<!--\s*<h([2-4])-->\s*([^<\r\n]+)/gi,
-    (_, level: string, title: string) =>
-      `</li></ul></td></tr></tbody></table><h${level}>${title.trim()}</h${level}>`,
-  );
+  return rawHtml
+    .replace(
+      /<!--\s*<h([2-4])-->\s*([^<\r\n]+)/gi,
+      (_, level: string, title: string) =>
+        `</li></ul></td></tr></tbody></table><h${level}>${title.trim()}</h${level}>`,
+    )
+    .replace(
+      /<li\s+<h2\s*=\s*["'][^"']*["']\s*>\s*([^<\r\n]+)/gi,
+      (_, title: string) =>
+        `</li></ul></td></tr></tbody></table><h2>${title.trim()}</h2>`,
+    );
 }
 
 function prepareNoteContent(rawHtml: string): PreparedNote {
