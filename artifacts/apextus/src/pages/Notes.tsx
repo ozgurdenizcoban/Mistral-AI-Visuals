@@ -61,12 +61,19 @@ function prepareNoteContent(rawHtml: string): PreparedNote {
     .trim()
     .replace(/\\n/g, "")
     .replace(/\\t/g, " ");
+  // Every major section is parsed independently. A response that stops in the
+  // middle of a table/list can therefore never pull the next h2 into a narrow cell.
+  const boundarySafeHtml = stripped
+    .split(/(?=<h2(?:\s|>))/i)
+    .filter(Boolean)
+    .map((section) => new DOMParser().parseFromString(section, "text/html").body.innerHTML)
+    .join("\n");
   const countTag = (tag: string, closing = false) =>
-    (stripped.match(new RegExp(`<${closing ? "/" : ""}${tag}(?:\\s[^>]*)?>`, "gi")) || []).length;
+    (boundarySafeHtml.match(new RegExp(`<${closing ? "/" : ""}${tag}(?:\\s[^>]*)?>`, "gi")) || []).length;
   const hasUnclosedStructure = ["div", "table", "tbody", "tr", "ul", "ol"]
     .some((tag) => countTag(tag) > countTag(tag, true));
 
-  const doc = new DOMParser().parseFromString(stripped, "text/html");
+  const doc = new DOMParser().parseFromString(boundarySafeHtml, "text/html");
   doc.querySelectorAll("script, style, iframe, object, embed").forEach((node) => node.remove());
   let removedDiagrams = 0;
   doc.querySelectorAll<HTMLElement>(".edu-diagram").forEach((diagram) => {
