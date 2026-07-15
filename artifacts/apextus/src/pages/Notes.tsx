@@ -396,12 +396,13 @@ export default function Notes() {
         // never make an otherwise successful note generation fail.
         toast.info("Ana konu notu hazırlandı; klinik bağlantılar daha sonra eklenebilir.");
       }
+      setNoteStage("Not Firebase'e kaydediliyor");
+      const savedRemotely = await fbSaveNote(topic, cleanHtml, cleanLink, [], NOTE_SCHEMA_VERSION);
       const full = buildNoteHtml(cat, topic, cleanHtml, cleanLink);
       noteCache[topic] = full;
       clearPartialNoteParts(topic);
       setNoteHtml(full);
-      toast.success(`${topic} notu yüklendi`);
-      fbSaveNote(topic, cleanHtml, cleanLink, [], NOTE_SCHEMA_VERSION).catch(() => {});
+      toast.success(savedRemotely ? `${topic} notu Firebase'e kaydedildi` : `${topic} notu bu cihazda kalıcı olarak kaydedildi`);
     } catch (e) {
       const savedParts = notePartCache[topic]?.length || 0;
       const resumeMessage = savedParts

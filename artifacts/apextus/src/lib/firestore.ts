@@ -14,15 +14,63 @@ export interface NoteDoc {
   schemaVersion?: number;
 }
 
+const NOTE_DB = "apextus-note-cache";
+const NOTE_STORE = "notes";
+
+function openNoteDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === "undefined") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const request = indexedDB.open(NOTE_DB, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(NOTE_STORE)) request.result.createObjectStore(NOTE_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+}
+
+async function getLocalNote(topic: string): Promise<NoteDoc | null> {
+  const database = await openNoteDb();
+  if (!database) return null;
+  return new Promise((resolve) => {
+    const request = database.transaction(NOTE_STORE, "readonly").objectStore(NOTE_STORE).get(topicKey(topic));
+    request.onsuccess = () => resolve((request.result as NoteDoc | undefined) || null);
+    request.onerror = () => resolve(null);
+  });
+}
+
+async function saveLocalNote(topic: string, data: NoteDoc): Promise<void> {
+  const database = await openNoteDb();
+  if (!database) return;
+  await new Promise<void>((resolve) => {
+    const request = database.transaction(NOTE_STORE, "readwrite").objectStore(NOTE_STORE).put(data, topicKey(topic));
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+  });
+}
+
+async function deleteLocalNote(topic: string): Promise<void> {
+  const database = await openNoteDb();
+  if (!database) return;
+  await new Promise<void>((resolve) => {
+    const request = database.transaction(NOTE_STORE, "readwrite").objectStore(NOTE_STORE).delete(topicKey(topic));
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+  });
+}
+
 export async function fbGetNote(topic: string): Promise<NoteDoc | null> {
   try {
     const snap = await getDoc(doc(db, "notes", topicKey(topic)));
     if (snap.exists()) {
       const d = snap.data() as NoteDoc;
-      if (d.html) return d;
+      if (d.html) {
+        void saveLocalNote(topic, d);
+        return d;
+      }
     }
   } catch (_) {}
-  return null;
+  return getLocalNote(topic);
 }
 
 export async function fbSaveNote(
@@ -31,14 +79,18 @@ export async function fbSaveNote(
   linkHtml: string,
   images?: { url: string; caption: string }[],
   schemaVersion = 1,
-): Promise<void> {
+): Promise<boolean> {
+  const data: NoteDoc = { html, linkHtml: linkHtml || "", topic, createdAt: Date.now(), schemaVersion };
+  if (images?.length) data.images = images;
+  let remoteSaved = false;
   try {
-    const data: NoteDoc = { html, linkHtml: linkHtml || "", topic, createdAt: Date.now(), schemaVersion };
-    if (images?.length) data.images = images;
     await setDoc(doc(db, "notes", topicKey(topic)), data);
+    remoteSaved = true;
   } catch (e) {
     console.warn("Note cache save error:", e);
   }
+  await saveLocalNote(topic, data);
+  return remoteSaved;
 }
 
 export async function fbDeleteNote(topic: string): Promise<void> {
@@ -46,6 +98,7 @@ export async function fbDeleteNote(topic: string): Promise<void> {
     const { deleteDoc } = await import("firebase/firestore");
     await deleteDoc(doc(db, "notes", topicKey(topic)));
   } catch (_) {}
+  await deleteLocalNote(topic);
 }
 
 export interface QuizQuestion {
