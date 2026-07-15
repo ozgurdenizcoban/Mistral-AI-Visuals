@@ -46,8 +46,16 @@ interface PreparedNote {
   removedDiagrams: number;
 }
 
+function repairBrokenPartBoundaries(rawHtml: string) {
+  return rawHtml.replace(
+    /<!--\s*<h([2-4])-->\s*([^<\r\n]+)/gi,
+    (_, level: string, title: string) =>
+      `</li></ul></td></tr></tbody></table><h${level}>${title.trim()}</h${level}>`,
+  );
+}
+
 function prepareNoteContent(rawHtml: string): PreparedNote {
-  const stripped = rawHtml
+  const stripped = repairBrokenPartBoundaries(rawHtml)
     .replace(/^```(?:html)?\s*/i, "")
     .replace(/\s*```\s*$/, "")
     .trim()
@@ -372,7 +380,7 @@ export default function Notes() {
         const part = (index + 1) as NoteGenerationPart;
         setNoteStage(`${stageLabels[index]} (${part}/${NOTE_PART_COUNT})`);
         const generatedPart = await mistralCompleteText(buildNotePrompt(cat, topic, part), 2200, 0.18);
-        completedParts.push(cleanContent(generatedPart));
+        completedParts.push(prepareNoteContent(cleanContent(generatedPart)).html);
         savePartialNoteParts(topic, completedParts);
       }
       let html = completedParts.join("\n");
