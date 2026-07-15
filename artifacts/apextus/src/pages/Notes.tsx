@@ -100,18 +100,18 @@ function prepareNoteForReading(rawHtml: string) {
     table.removeAttribute("width");
     table.querySelectorAll("th, td").forEach((cell) => cell.removeAttribute("width"));
 
-    const rows = Array.from(table.querySelectorAll(":scope > thead > tr, :scope > tbody > tr, :scope > tr"));
-    const columnCount = Math.max(0, ...rows.map((row) => row.querySelectorAll(":scope > th, :scope > td").length));
+    const rows = Array.from(table.rows);
+    const columnCount = Math.max(0, ...rows.map((row) => row.cells.length));
     if (columnCount > 2) {
-      const headerRow = rows.find((row) => row.querySelector(":scope > th"));
+      const headerRow = rows.find((row) => Array.from(row.cells).some((cell) => cell.tagName === "TH"));
       const headers = headerRow
-        ? Array.from(headerRow.querySelectorAll(":scope > th, :scope > td")).map((cell, index) =>
+        ? Array.from(headerRow.cells).map((cell, index) =>
             cell.textContent?.replace(/\s+/g, " ").trim() || `Bilgi ${index + 1}`)
         : Array.from({ length: columnCount }, (_, index) => `Bilgi ${index + 1}`);
       const grid = doc.createElement("div");
       grid.className = "note-data-grid";
       rows.filter((row) => row !== headerRow).forEach((row) => {
-        const cells = Array.from(row.querySelectorAll<HTMLElement>(":scope > th, :scope > td"));
+        const cells = Array.from(row.cells);
         if (!cells.some((cell) => cell.textContent?.trim())) return;
         const card = doc.createElement("section");
         card.className = "note-data-card";
