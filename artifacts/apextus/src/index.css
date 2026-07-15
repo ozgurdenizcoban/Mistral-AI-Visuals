@@ -821,6 +821,40 @@ body {
 }
 .nb .note-table-scroll th:first-child,
 .nb .note-table-scroll td:first-child { min-width: 180px; }
+.nb .note-table-compact {
+  width: 100% !important; max-width: 100%; table-layout: fixed;
+  border-collapse: collapse; margin: 12px 0 18px;
+}
+.nb .note-table-compact th,
+.nb .note-table-compact td {
+  width: auto !important; min-width: 0 !important; max-width: none;
+  word-break: normal !important; overflow-wrap: break-word !important;
+  white-space: normal !important; vertical-align: top;
+}
+.note-data-grid { display: grid; gap: 12px; margin: 12px 0 20px; min-width: 0; }
+.note-data-card {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0; min-width: 0; overflow: hidden;
+  border: 1px solid #d9d7e2; border-radius: 8px; background: #fff;
+}
+.note-data-field {
+  min-width: 0; padding: 11px 13px; border-bottom: 1px solid #e8e7ef;
+}
+.note-data-field:nth-child(odd) { border-right: 1px solid #e8e7ef; }
+.note-data-label {
+  display: block; margin-bottom: 5px; color: #5f45c8 !important;
+  font-size: .66rem; line-height: 1.35; text-transform: uppercase;
+}
+.note-data-value,
+.note-data-value * {
+  min-width: 0; max-width: 100%; word-break: normal !important;
+  overflow-wrap: break-word !important; white-space: normal !important;
+}
+.nb li { min-width: 0; word-break: normal !important; overflow-wrap: break-word !important; }
+@media (max-width: 700px) {
+  .note-data-card { grid-template-columns: 1fr; }
+  .note-data-field:nth-child(odd) { border-right: 0; }
+}
 .nb tr:nth-child(even) td { background: rgba(255,255,255,.02); }
 .nb ul { list-style: none; display: flex; flex-direction: column; gap: 3px; margin: 6px 0 10px; }
 .nb ul li { padding: 6px 10px; background: rgba(24,33,50,.72); border: 1px solid rgba(255,255,255,.04); border-radius: 6px; display: flex; gap: 6px; line-height: 1.58; color: #dbe4f2; word-break: break-word; }

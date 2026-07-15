@@ -95,15 +95,45 @@ function prepareNoteContent(rawHtml: string): PreparedNote {
 
 function prepareNoteForReading(rawHtml: string) {
   const doc = new DOMParser().parseFromString(rawHtml, "text/html");
-  doc.querySelectorAll("table").forEach((table) => {
+  const tables = Array.from(doc.querySelectorAll("table")).reverse();
+  tables.forEach((table) => {
     table.removeAttribute("width");
     table.querySelectorAll("th, td").forEach((cell) => cell.removeAttribute("width"));
-    if (!table.parentElement?.classList.contains("note-table-scroll")) {
-      const wrapper = doc.createElement("div");
-      wrapper.className = "note-table-scroll";
-      table.parentNode?.insertBefore(wrapper, table);
-      wrapper.appendChild(table);
+
+    const rows = Array.from(table.querySelectorAll(":scope > thead > tr, :scope > tbody > tr, :scope > tr"));
+    const columnCount = Math.max(0, ...rows.map((row) => row.querySelectorAll(":scope > th, :scope > td").length));
+    if (columnCount > 2) {
+      const headerRow = rows.find((row) => row.querySelector(":scope > th"));
+      const headers = headerRow
+        ? Array.from(headerRow.querySelectorAll(":scope > th, :scope > td")).map((cell, index) =>
+            cell.textContent?.replace(/\s+/g, " ").trim() || `Bilgi ${index + 1}`)
+        : Array.from({ length: columnCount }, (_, index) => `Bilgi ${index + 1}`);
+      const grid = doc.createElement("div");
+      grid.className = "note-data-grid";
+      rows.filter((row) => row !== headerRow).forEach((row) => {
+        const cells = Array.from(row.querySelectorAll<HTMLElement>(":scope > th, :scope > td"));
+        if (!cells.some((cell) => cell.textContent?.trim())) return;
+        const card = doc.createElement("section");
+        card.className = "note-data-card";
+        cells.forEach((cell, index) => {
+          if (!cell.textContent?.trim()) return;
+          const field = doc.createElement("div");
+          field.className = "note-data-field";
+          const label = doc.createElement("strong");
+          label.className = "note-data-label";
+          label.textContent = headers[index] || `Bilgi ${index + 1}`;
+          const value = doc.createElement("div");
+          value.className = "note-data-value";
+          value.innerHTML = cell.innerHTML;
+          field.append(label, value);
+          card.appendChild(field);
+        });
+        grid.appendChild(card);
+      });
+      if (grid.childElementCount) table.replaceWith(grid);
+      return;
     }
+    table.classList.add("note-table-compact");
   });
   return doc.body.innerHTML;
 }
