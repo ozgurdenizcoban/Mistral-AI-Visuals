@@ -340,7 +340,10 @@ export default function Notes() {
       const cached = await fbGetNote(topic);
       if (cached?.html && (cached.schemaVersion || 0) >= NOTE_SCHEMA_VERSION) {
         const prepared = prepareNoteContent(cached.html);
-        if (prepared.isComplete) {
+        const cachedTextLength = new DOMParser()
+          .parseFromString(prepared.html, "text/html")
+          .body.textContent?.replace(/\s+/g, " ").trim().length || 0;
+        if (cachedTextLength >= 2500) {
           const full = buildNoteHtml(cat, topic, curateMnemonics(prepared.html), cached.linkHtml || "");
           noteCache[topic] = full;
           setNoteHtml(full);
@@ -384,7 +387,12 @@ export default function Notes() {
         }
       }
       const prepared = prepareNoteContent(html);
-      if (!prepared.isComplete) throw new Error("Konu notu tamamlanmadan yanıt kesildi. Eksik içerik kaydedilmedi; yeniden dene.");
+      const usableTextLength = new DOMParser()
+        .parseFromString(prepared.html, "text/html")
+        .body.textContent?.replace(/\s+/g, " ").trim().length || 0;
+      if (completedParts.length < NOTE_PART_COUNT || usableTextLength < 2500) {
+        throw new Error("Konu notunun kullanılabilir içeriği oluşmadı; yeniden dene.");
+      }
       const cleanHtml = curateMnemonics(prepared.html);
       let cleanLink = "";
       try {
