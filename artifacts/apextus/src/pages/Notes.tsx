@@ -81,6 +81,10 @@ function prepareNoteContent(rawHtml: string): PreparedNote {
 
   const doc = new DOMParser().parseFromString(boundarySafeHtml, "text/html");
   doc.querySelectorAll("script, style, iframe, object, embed").forEach((node) => node.remove());
+  doc.querySelectorAll<HTMLElement>(".algo").forEach((block) => {
+    const text = (block.textContent || "").replace(/\s+/g, " ").trim();
+    if (/^algoritma\s*:\s*(meta|placeholder|şablon)$/i.test(text) || text.length < 24) block.remove();
+  });
   let removedDiagrams = 0;
   doc.querySelectorAll<HTMLElement>(".edu-diagram").forEach((diagram) => {
     diagram.querySelectorAll<HTMLElement>("*").forEach((node) => {
