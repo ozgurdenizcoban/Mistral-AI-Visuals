@@ -1,5 +1,5 @@
 import { signOut } from "firebase/auth";
-import { Activity, BarChart3, BookOpen, Brain, CalendarDays, ChevronRight, ClipboardCheck, Home, LogOut, Settings, Target } from "lucide-react";
+import { Activity, BarChart3, BookOpen, Brain, CalendarDays, ChevronRight, ClipboardCheck, Home, LogOut, Settings, Sparkles, Target } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 
@@ -7,6 +7,7 @@ const NAV = [
   { id: "dashboard", icon: Home, label: "Ana sayfa" },
   { id: "notes", icon: BookOpen, label: "Konu anlatımları" },
   { id: "quiz", icon: Brain, label: "Soru çöz" },
+  { id: "potential", icon: Sparkles, label: "Muhtemel Sorular" },
   { id: "review", icon: CalendarDays, label: "Kişisel tekrar" },
   { id: "fulltus", icon: ClipboardCheck, label: "TUS denemesi" },
   { id: "mockexam", icon: Target, label: "Mini denemeler" },
@@ -26,11 +27,11 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
       </button>
       <nav className="sidebar-nav">
         <div className="nav-title">ÖĞRENME</div>
-        {NAV.slice(0, 4).map(({ id, icon: Icon, label }) => (
+        {NAV.slice(0, 5).map(({ id, icon: Icon, label }) => (
           <button key={id} className={`nav-item ${currentPage === id ? "active" : ""}`} onClick={() => go(id)}><Icon size={19} /><span>{label}</span>{currentPage === id && <ChevronRight size={15} />}</button>
         ))}
         <div className="nav-title nav-title-spaced">SINAV & ANALİZ</div>
-        {NAV.slice(4).map(({ id, icon: Icon, label }) => (
+        {NAV.slice(5).map(({ id, icon: Icon, label }) => (
           <button key={id} className={`nav-item ${currentPage === id ? "active" : ""}`} onClick={() => go(id)}><Icon size={19} /><span>{label}</span>{currentPage === id && <ChevronRight size={15} />}</button>
         ))}
       </nav>

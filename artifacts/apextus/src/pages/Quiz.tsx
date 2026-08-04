@@ -46,12 +46,18 @@ async function enrichQuestionsWithSourceImages(questions: Q[], requestedCount: n
   return questions;
 }
 
-export default function Quiz() {
+const POTENTIAL_CATEGORIES = [
+  "Anatomi", "Histoloji ve Embriyoloji", "Fizyoloji", "Biyokimya",
+  "Mikrobiyoloji", "Patoloji", "Farmakoloji",
+];
+
+export default function Quiz({ mode = "standard" }: { mode?: "standard" | "potential" }) {
+  const isPotential = mode === "potential";
   const { state, saveState, isPro, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
 
   const [phase, setPhase] = useState<"setup" | "quiz" | "result">("setup");
-  const [cat, setCat] = useState(quizTarget?.cat || "Kardiyoloji");
-  const [topic, setTopic] = useState(quizTarget?.topic || "");
+  const [cat, setCat] = useState(isPotential ? "Anatomi" : (quizTarget?.cat || "Kardiyoloji"));
+  const [topic, setTopic] = useState(isPotential ? "" : (quizTarget?.topic || ""));
   const [count, setCount] = useState(5);
   const [diff, setDiff] = useState("Orta");
   const [timerMode, setTimerMode] = useState(false);
@@ -80,12 +86,12 @@ export default function Quiz() {
 
 
   useEffect(() => {
-    if (quizTarget) {
+    if (!isPotential && quizTarget) {
       setCat(quizTarget.cat);
       setTopic(quizTarget.topic || "");
       setQuizTarget(null);
     }
-  }, [quizTarget, setQuizTarget]);
+  }, [isPotential, quizTarget, setQuizTarget]);
 
   function stopTimer() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -115,7 +121,7 @@ export default function Quiz() {
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
-      const cachedKey = topic || activeCat;
+      const cachedKey = `${isPotential ? "muhtemel::" : ""}${topic || activeCat}`;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
         const cachedQuestions = cached.slice(0, count).map((q) => ({
@@ -138,16 +144,20 @@ export default function Quiz() {
 
       const tiplar = soruTipleri.sort(() => Math.random() - 0.5).slice(0, Math.min(count, soruTipleri.length));
       const sourceGuide = getSourceGuide(activeCat, topics);
-      const optionBank = await fbGetOptionBank(activeCat, 14);
-      const optionBankGuide = optionBank.length
+      const optionBank = isPotential ? await fbGetOptionBank(activeCat, 18) : [];
+      if (isPotential && !optionBank.length) {
+        throw new Error("Bu ders için şık bankası verisi bulunamadı");
+      }
+      const optionBankGuide = isPotential
         ? `\nÇIKMIŞ TUS ŞIK ÖRÜNTÜLERİ:\n${JSON.stringify(optionBank.map((entry) => ({
             topic: entry.topic,
             subtopic: entry.subtopic,
+            examPeriod: entry.examPeriod,
             options: entry.options,
-          })))}\nBu havuzu yalnızca seçilen konuya tıbben uyan yeni soruların doğru cevap ve çeldiricilerini kurmak için kullan. Kaynak soru köklerini yeniden üretme. İlgisiz şıkları zorla kullanma; tek doğru cevap kuralını koru.`
+          })))}\nBu bölüm MUHTEMEL SORULAR içindir. Şıkların işaret ettiği yüksek olasılıklı kavramlardan hareketle tamamen yeni soru kökleri oluştur. Kaynak soru köklerini yeniden üretme. Yalnızca seçilen konuya tıbben uyan şıkları doğru cevap veya çeldirici olarak değerlendir; ilgisiz şıkları zorla kullanma ve tek doğru cevap kuralını koru.`
         : "";
 
-      const prompt = `Sen deneyimli bir TUS sınavı hazırlayıcısısın. Aşağıdaki konu(lar) için TUS sınavına çıkabilecek kalitede ${count} soru üret.
+      const prompt = `Sen deneyimli bir TUS sınavı hazırlayıcısısın. ${isPotential ? "Etiketli geçmiş sınav şıklarındaki kavramları analiz ederek TUS'ta çıkması muhtemel" : "Aşağıdaki konu(lar) için TUS sınavına çıkabilecek kalitede"} ${count} soru üret.
 
 KATEGORİ: ${activeCat}
 KONULAR: ${topics.join(", ")}
@@ -211,7 +221,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
 
       setQuestions(qs);
       // Save and immediately mark as seen so they never repeat
-      fbSaveQuestions(topic || activeCat, diff, qs)
+      fbSaveQuestions(cachedKey, diff, qs)
         .then((savedIds) => { if (savedIds.length) markSeenQ(savedIds); })
         .catch(() => {});
       setLoading(false);
@@ -320,14 +330,18 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
 
   /* ─── SETUP ─────────────────────────────────────────── */
   if (phase === "setup") {
-    const categories = [...TREE.map((b) => b.cat), "Karışık"];
+    const categories = isPotential ? POTENTIAL_CATEGORIES : [...TREE.map((b) => b.cat), "Karışık"];
     const topicsOfCat = TREE.find((b) => b.cat === cat)?.topics || [];
 
     return (
       <div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>TUS Quiz</div>
-          <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>Temel ve klinik bilimlerde TUS tarzı sorular — performansına göre kişiselleştirilmiş</div>
+          <div style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--cream)" }}>{isPotential ? "Muhtemel Sorular" : "TUS Quiz"}</div>
+          <div style={{ color: "var(--t2)", fontSize: ".82rem", marginTop: 4 }}>
+            {isPotential
+              ? "Çıkmış TUS şıklarındaki konu örüntülerinden hareketle yapay zekânın hazırladığı yeni sorular"
+              : "Temel ve klinik bilimlerde TUS tarzı sorular — performansına göre kişiselleştirilmiş"}
+          </div>
         </div>
 
         <div className="card">
@@ -377,7 +391,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
               90 sn zamanlayıcı
             </label>
           </div>
-          <button className="btn btn-primary lg full" style={{ marginTop: 20 }} onClick={generateQuestions}>✦ Quiz Başlat</button>
+          <button className="btn btn-primary lg full" style={{ marginTop: 20 }} onClick={generateQuestions}>✦ {isPotential ? "Muhtemel Soruları Oluştur" : "Quiz Başlat"}</button>
         </div>
       </div>
     );
@@ -388,8 +402,8 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
     return (
       <div className="loading-screen">
         <div className="loading-orb">✦</div>
-        <div className="loading-title">Sorular hazırlanıyor</div>
-        <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>TUS soruları hazırlanıyor<span className="loading-dots" /></div>
+        <div className="loading-title">{isPotential ? "Muhtemel sorular hazırlanıyor" : "Sorular hazırlanıyor"}</div>
+        <div style={{ color: "var(--t2)", fontSize: ".8rem", marginTop: 6 }}>{isPotential ? "Şık örüntüleri analiz ediliyor" : "TUS soruları hazırlanıyor"}<span className="loading-dots" /></div>
       </div>
     );
   }
@@ -427,7 +441,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
         )}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-          <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); }}>✦ Yeni Quiz</button>
+          <button className="btn btn-primary" onClick={() => { setPhase("setup"); setCurrent(0); setScore(0); setWrongList([]); }}>✦ {isPotential ? "Yeni Muhtemel Sorular" : "Yeni Quiz"}</button>
           <button className="btn btn-ghost" onClick={() => setCurrentPage("stats")}>📊 İstatistikler</button>
         </div>
       </div>
@@ -465,7 +479,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
       {/* Question card */}
       <div className="vc">
         <div className="vhdr">
-          <span className="vlbl">TUS Sorusu</span>
+          <span className="vlbl">{isPotential ? "Muhtemel TUS Sorusu" : "TUS Sorusu"}</span>
         </div>
 
         <div className="vbody">

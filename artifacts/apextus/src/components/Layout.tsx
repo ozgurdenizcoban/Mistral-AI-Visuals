@@ -12,6 +12,7 @@ import Account from "@/pages/Account";
 import MockExam from "@/pages/MockExam";
 import TusScore from "@/pages/TusScore";
 import FullTUS from "@/pages/FullTUS";
+import PotentialQuestions from "@/pages/PotentialQuestions";
 
 export default function Layout() {
   const { user, loading, currentPage, username, setCurrentPage } = useApp();
@@ -23,7 +24,7 @@ export default function Layout() {
   if (!user) return <AuthOverlay />;
 
   const pages: Record<string, React.ReactNode> = {
-    dashboard: <Dashboard />, quiz: <Quiz />, mockexam: <MockExam />,
+    dashboard: <Dashboard />, quiz: <Quiz />, potential: <PotentialQuestions />, mockexam: <MockExam />,
     tusscore: <TusScore />, fulltus: <FullTUS />, notes: <Notes />,
     stats: <Stats />, review: <Review />, account: <Account />,
   };
