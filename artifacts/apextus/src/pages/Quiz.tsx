@@ -135,7 +135,7 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
-      const cachedKey = `${isPotential ? "muhtemel-v4::" : ""}${topic || activeCat}`;
+      const cachedKey = `${isPotential ? "muhtemel-v5::" : ""}${topic || activeCat}`;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
         const cachedQuestions = cached.slice(0, count).map((q) => ({
