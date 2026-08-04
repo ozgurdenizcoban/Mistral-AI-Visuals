@@ -3,7 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { addWrongToPersonalNotes } from "@/lib/personalNotes";
 import { mistralJSON, mistralText, parseJSON } from "@/lib/mistral";
 import { TREE, soruTipleri } from "@/lib/data";
-import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, QuizQuestion } from "@/lib/firestore";
+import { fbGetQuestions, fbSaveQuestions, fbGetAnalysis, fbSaveAnalysis, fbGetOptionBank, QuizQuestion } from "@/lib/firestore";
 import { buildQuizImageHtml, getQuizImage } from "@/lib/imageGen";
 import { getSourceGuide } from "@/lib/sourceGuides";
 import { qFingerprint, toDay, prevDay } from "@/lib/utils";
@@ -138,12 +138,21 @@ export default function Quiz() {
 
       const tiplar = soruTipleri.sort(() => Math.random() - 0.5).slice(0, Math.min(count, soruTipleri.length));
       const sourceGuide = getSourceGuide(activeCat, topics);
+      const optionBank = await fbGetOptionBank(activeCat, 14);
+      const optionBankGuide = optionBank.length
+        ? `\nÇIKMIŞ TUS ŞIK ÖRÜNTÜLERİ:\n${JSON.stringify(optionBank.map((entry) => ({
+            topic: entry.topic,
+            subtopic: entry.subtopic,
+            options: entry.options,
+          })))}\nBu havuzu yalnızca seçilen konuya tıbben uyan yeni soruların doğru cevap ve çeldiricilerini kurmak için kullan. Kaynak soru köklerini yeniden üretme. İlgisiz şıkları zorla kullanma; tek doğru cevap kuralını koru.`
+        : "";
 
       const prompt = `Sen deneyimli bir TUS sınavı hazırlayıcısısın. Aşağıdaki konu(lar) için TUS sınavına çıkabilecek kalitede ${count} soru üret.
 
 KATEGORİ: ${activeCat}
 KONULAR: ${topics.join(", ")}
 ${sourceGuide}
+${optionBankGuide}
 KALITE KURALLARI:
 - Sorular ezber degil klinik akil yurutme gerektirsin.
 - Klinik derslerde yaş, cinsiyet, başvuru, fizik muayene ve en az 2 laboratuvar/görüntüleme ipucu olan vaka kullan.

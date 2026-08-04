@@ -1,6 +1,6 @@
 import {
   doc, getDoc, setDoc, updateDoc, collection,
-  query, limit, getDocs, writeBatch,
+  query, limit, getDocs, writeBatch, where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { topicKey } from "./utils";
@@ -114,6 +114,41 @@ export interface QuizQuestion {
   tags: string[];
   _fid?: string;
   createdAt?: number;
+}
+
+export interface OptionBankEntry {
+  id: string;
+  options: string[];
+  course: string;
+  topic: string;
+  subtopic: string;
+  tags: string[];
+  examPeriod: string;
+  examType: string;
+  questionNumber: number;
+  source: string;
+  active: boolean;
+}
+
+export async function fbGetOptionBank(course: string, count = 12): Promise<OptionBankEntry[]> {
+  try {
+    const snap = await getDocs(query(
+      collection(db, "optionBank"),
+      where("course", "==", course),
+      limit(60),
+    ));
+    const entries: OptionBankEntry[] = [];
+    snap.forEach((item) => {
+      const entry = item.data() as OptionBankEntry;
+      if (entry.active !== false && Array.isArray(entry.options) && entry.options.length === 5) {
+        entries.push({ ...entry, id: item.id });
+      }
+    });
+    return entries.sort(() => Math.random() - 0.5).slice(0, count);
+  } catch (error) {
+    console.warn("Option bank read error:", error);
+    return [];
+  }
 }
 
 export async function fbGetQuestions(
