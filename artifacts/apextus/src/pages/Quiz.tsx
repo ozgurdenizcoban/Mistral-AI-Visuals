@@ -51,6 +51,16 @@ const POTENTIAL_CATEGORIES = [
   "Mikrobiyoloji", "Patoloji", "Farmakoloji",
 ];
 
+const POTENTIAL_QUESTION_STYLES: Record<string, string> = {
+  Anatomi: "Kısa ve doğrudan komşuluk, seyir, innervasyon, kanlanma, lezyon-bulgu veya yapı-fonksiyon ilişkisi soruları kullan.",
+  "Histoloji ve Embriyoloji": "Hücre/doku özelliği, embriyolojik köken, gelişim basamağı ve yapı eşleştirmesi biçimlerini kullan.",
+  Fizyoloji: "Mekanizma, deney sonucu, grafik/değer yorumu, geri bildirim ve değişkenler arası ilişki biçimlerini kullan.",
+  Biyokimya: "Enzim-substrat, metabolik yolak, kofaktör, moleküler mekanizma ve laboratuvar ilişkisi biçimlerini kullan.",
+  Mikrobiyoloji: "Etken-özellik, virülans faktörü, tanı yöntemi, immün yanıt ve antimikrobiyal duyarlılık biçimlerini kullan.",
+  Patoloji: "Morfoloji, patogenez, moleküler değişiklik, preparat bulgusu ve hastalık-bulgu ilişkisi biçimlerini kullan.",
+  Farmakoloji: "Etki mekanizması, reseptör, farmakokinetik, yan etki, etkileşim ve ilaç-endikasyon ilişkisi biçimlerini kullan.",
+};
+
 export default function Quiz({ mode = "standard" }: { mode?: "standard" | "potential" }) {
   const isPotential = mode === "potential";
   const { state, saveState, isPro, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
@@ -121,7 +131,7 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
-      const cachedKey = `${isPotential ? "muhtemel::" : ""}${topic || activeCat}`;
+      const cachedKey = `${isPotential ? "muhtemel-v2::" : ""}${topic || activeCat}`;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
         const cachedQuestions = cached.slice(0, count).map((q) => ({
@@ -143,7 +153,7 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
         : (TREE.find((b) => b.cat === activeCat)?.topics || []).sort(() => Math.random() - 0.5).slice(0, 4);
 
       const tiplar = soruTipleri.sort(() => Math.random() - 0.5).slice(0, Math.min(count, soruTipleri.length));
-      const sourceGuide = getSourceGuide(activeCat, topics);
+      const sourceGuide = isPotential ? "" : getSourceGuide(activeCat, topics);
       const optionBank = isPotential ? await fbGetOptionBank(activeCat, 18) : [];
       if (isPotential && !optionBank.length) {
         throw new Error("Bu ders için şık bankası verisi bulunamadı");
@@ -156,6 +166,22 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
             options: entry.options,
           })))}\nBu bölüm MUHTEMEL SORULAR içindir. Şıkların işaret ettiği yüksek olasılıklı kavramlardan hareketle tamamen yeni soru kökleri oluştur. Kaynak soru köklerini yeniden üretme. Yalnızca seçilen konuya tıbben uyan şıkları doğru cevap veya çeldirici olarak değerlendir; ilgisiz şıkları zorla kullanma ve tek doğru cevap kuralını koru.`
         : "";
+      const qualityRules = isPotential
+        ? `ÇIKMIŞ TEMEL BİLİMLER SORU BİÇİMİ KURALLARI:
+- Klinik vaka yazmak varsayılan yöntem DEĞİLDİR. Soruların büyük çoğunluğunda "vaka" alanını boş bırak ve doğrudan soru kökü yaz.
+- Hasta yaşı, cinsiyeti, yakınması, fizik muayenesi ve laboratuvar hikâyesi ekleme; yalnızca seçilen şık örüntüsü gerçekten klinik uygulama gerektiriyorsa kısa bir senaryo kullan.
+- Soru köklerini çıkmış TUS Temel Bilimler dilindeki gibi kısa, yoğun ve ayırt edici kur: "Aşağıdakilerden hangisi...?", "... ile ilgili hangisi doğrudur/yanlıştır?", "... sonucunda hangisi artar/azalır?" veya kısa bir deney/preparat öncülü kullan.
+- Her sorunun biçimini, yararlanılan şık grubunun konu ve alt konu etiketine göre seç. Aynı kalıbı bütün sorularda tekrarlama.
+- Şıklardan birinin neden doğru, diğerlerinin neden çeldirici olduğunu tıbbi ilişki üzerinden kur; şıklara uyacak yapay bir vaka icat etme.
+- ${POTENTIAL_QUESTION_STYLES[activeCat] || "Temel bilimlere uygun kısa ve doğrudan soru kökleri kullan."}
+- Açıklama doğru cevabı ve en az iki yanlış seçeneğin neden elendiğini anlatsın.`
+        : `KALİTE KURALLARI:
+- Sorular ezber değil klinik akıl yürütme gerektirsin.
+- Klinik derslerde yaş, cinsiyet, başvuru, fizik muayene ve en az 2 laboratuvar/görüntüleme ipucu olan vaka kullan.
+- Temel bilimlerde soru kökü mekanizma, deney, hücre/doku bulgusu, reseptör-yolak, enzim veya patoloji preparatı mantığıyla kurulabilir; gereksiz klinik hikâye ekleme.
+- Seçenekler birbirine yakın ama tek doğru olacak şekilde ayırıcı tanı mantığıyla yazılsın.
+- TUS tuzakları, eşik değerleri, klasik bulgular ve tedavi algoritmaları kullanılsın.
+- Açıklama doğru cevabı ve en az 2 yanlış seçeneğin neden elendiğini anlatsın.`;
 
       const prompt = `Sen deneyimli bir TUS sınavı hazırlayıcısısın. ${isPotential ? "Etiketli geçmiş sınav şıklarındaki kavramları analiz ederek TUS'ta çıkması muhtemel" : "Aşağıdaki konu(lar) için TUS sınavına çıkabilecek kalitede"} ${count} soru üret.
 
@@ -163,17 +189,11 @@ KATEGORİ: ${activeCat}
 KONULAR: ${topics.join(", ")}
 ${sourceGuide}
 ${optionBankGuide}
-KALITE KURALLARI:
-- Sorular ezber degil klinik akil yurutme gerektirsin.
-- Klinik derslerde yaş, cinsiyet, başvuru, fizik muayene ve en az 2 laboratuvar/görüntüleme ipucu olan vaka kullan.
-- Temel bilimlerde soru kökü mekanizma, deney, hücre/doku bulgusu, reseptör-yolak, enzim veya patoloji preparatı mantığıyla kurulabilir; gereksiz klinik hikaye ekleme.
-- Secenekler birbirine yakin ama tek dogru olacak sekilde ayirici tani mantigiyla yazilsin.
-- TUS tuzaklari, esik degerleri, klasik bulgular ve tedavi algoritmalari kullanilsin.
-- Aciklama dogru cevabi ve en az 2 yanlis secenegin neden elendigini anlatsin.
+${qualityRules}
 - Sadece gorsel gercekten klinik akil yurutmeyi guclendiriyorsa visualHtml ekle. AI cizimi gerekiyorsa guvenli inline <svg> veya <div class="quiz-ai-diagram"> kullan; gereksizse visualHtml bos string olsun. Sistem uygun konularda ayrica Wikipedia/Wikimedia gorseli ekleyebilir.
 - visualHtml zemini daima beyaz veya cok acik olsun. Siyah/koyu genel arka plan kullanma. Tum metinler koyu ve yuksek kontrastli, oklar ve baglanti cizgileri belirgin koyu mor olsun. Koyu zemin ustune koyu yazi veya acik zemin ustune beyaz yazi ASLA kullanma.
 ZORLUK: ${diff}
-SORU TİPLERİ: ${tiplar.join(", ")}
+${isPotential ? "" : `SORU TİPLERİ: ${tiplar.join(", ")}`}
 
 Her soru TUS tarzında olsun. Klinik derslerde gerçekçi vaka, temel bilimlerde mekanizma/preparat/laboratuvar odaklı kaliteli soru yaz. 5 şık, 1 doğru cevap. Türkçe yaz.
 
@@ -181,8 +201,8 @@ JSON formatı (başka hiçbir şey yazma):
 {
   "questions": [
     {
-      "vaka": "65 yaşında erkek hasta...",
-      "soru": "Bu hastanın en olası tanısı nedir?",
+      "vaka": ${isPotential ? '""' : '"65 yaşında erkek hasta..."'},
+      "soru": ${isPotential ? '"Aşağıdakilerden hangisi bu mekanizmayla ilişkilidir?"' : '"Bu hastanın en olası tanısı nedir?"'},
       "opts": ["A seçeneği", "B seçeneği", "C seçeneği", "D seçeneği", "E seçeneği"],
       "ans": 2,
       "exp": "Doğru cevap B'dir çünkü...",
