@@ -135,7 +135,7 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
-      const cachedKey = `${isPotential ? "muhtemel-v5::" : ""}${topic || activeCat}`;
+      const cachedKey = `${isPotential ? "muhtemel-v6::" : ""}${topic || activeCat}`;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
         const cachedQuestions = cached.slice(0, count).map((q) => ({
@@ -172,7 +172,7 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
             questionStyle: entry.questionStyle || "",
             stemTemplate: entry.stemTemplate || "",
             options: entry.options,
-          })))}\nBu bölüm MUHTEMEL SORULAR içindir. Şıkların işaret ettiği yüksek olasılıklı kavramlardan hareketle tamamen yeni soru kökleri oluştur. Her soruda yararlandığın bir veya daha fazla kaydın ref değerini sourceRefs alanında aynen döndür. questionStyle ve stemTemplate alanlarındaki soyut biçime uy; kaynak soru köklerini yeniden üretme. Yalnızca seçilen konuya tıbben uyan şıkları doğru cevap veya çeldirici olarak değerlendir; ilgisiz şıkları zorla kullanma ve tek doğru cevap kuralını koru.`
+          })))}\nBu bölüm MUHTEMEL SORULAR içindir. Şıkların işaret ettiği yüksek olasılıklı kavramlardan hareketle tamamen yeni soru kökleri oluştur. Her soru için yalnızca bir ana kaynak kaydı seç ve onun ref değerini sourceRefs alanında tek eleman olarak aynen döndür. questionStyle ve stemTemplate alanlarındaki soyut biçime uy; kaynak soru köklerini yeniden üretme. Yalnızca seçilen konuya tıbben uyan şıkları doğru cevap veya çeldirici olarak değerlendir; ilgisiz şıkları zorla kullanma ve tek doğru cevap kuralını koru.`
         : "";
       const qualityRules = isPotential
         ? `ÇIKMIŞ TUS SORU BİÇİMİ KURALLARI:
@@ -231,7 +231,7 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
       const qs: Q[] = (parsed?.questions || [])
         .map((q) => {
           const sourceRefs = isPotential
-            ? [...new Set((q.sourceRefs || []).filter((ref) => optionBankById.has(ref)))].slice(0, 3)
+            ? [...new Set((q.sourceRefs || []).filter((ref) => optionBankById.has(ref)))].slice(0, 1)
             : [];
           const sourceYears = [...new Set(sourceRefs
             .map((ref) => optionBankById.get(ref))

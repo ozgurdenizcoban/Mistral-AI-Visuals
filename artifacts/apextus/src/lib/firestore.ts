@@ -140,7 +140,7 @@ export async function fbGetOptionBank(course: string, count = 12): Promise<Optio
     const snap = await getDocs(query(
       collection(db, "optionBank"),
       where("course", "==", course),
-      limit(60),
+      limit(300),
     ));
     const entries: OptionBankEntry[] = [];
     snap.forEach((item) => {
@@ -149,7 +149,25 @@ export async function fbGetOptionBank(course: string, count = 12): Promise<Optio
         entries.push({ ...entry, id: item.id });
       }
     });
-    return entries.sort(() => Math.random() - 0.5).slice(0, count);
+    const byYear = new Map<number, OptionBankEntry[]>();
+    entries.forEach((entry) => {
+      const year = entry.examYear || Number(entry.examPeriod?.slice(0, 4));
+      if (!Number.isFinite(year)) return;
+      const bucket = byYear.get(year) || [];
+      bucket.push(entry);
+      byYear.set(year, bucket);
+    });
+    byYear.forEach((bucket) => bucket.sort(() => Math.random() - 0.5));
+    const years = [...byYear.keys()].sort(() => Math.random() - 0.5);
+    const balanced: OptionBankEntry[] = [];
+    while (balanced.length < count && years.some((year) => (byYear.get(year)?.length || 0) > 0)) {
+      for (const year of years) {
+        const entry = byYear.get(year)?.pop();
+        if (entry) balanced.push(entry);
+        if (balanced.length >= count) break;
+      }
+    }
+    return balanced;
   } catch (error) {
     console.warn("Option bank read error:", error);
     return [];
