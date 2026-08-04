@@ -112,6 +112,8 @@ export interface QuizQuestion {
   cat: string;
   diff: string;
   tags: string[];
+  sourceRefs?: string[];
+  sourceYears?: number[];
   _fid?: string;
   createdAt?: number;
 }
@@ -124,10 +126,13 @@ export interface OptionBankEntry {
   subtopic: string;
   tags: string[];
   examPeriod: string;
+  examYear?: number;
   examType: string;
   questionNumber: number;
   source: string;
   active: boolean;
+  questionStyle?: string;
+  stemTemplate?: string;
 }
 
 export async function fbGetOptionBank(course: string, count = 12): Promise<OptionBankEntry[]> {
@@ -194,6 +199,7 @@ export async function fbSaveQuestions(
         ans: q.ans || 0, exp: q.exp || "", cat: q.cat || topic,
         visualHtml: q.visualHtml || "", visualCaption: q.visualCaption || "",
         diff: q.diff || diff, tags: q.tags || [], createdAt: Date.now(),
+        sourceRefs: q.sourceRefs || [], sourceYears: q.sourceYears || [],
       });
     });
     await batch.commit();

@@ -49,6 +49,10 @@ async function enrichQuestionsWithSourceImages(questions: Q[], requestedCount: n
 const POTENTIAL_CATEGORIES = [
   "Anatomi", "Histoloji ve Embriyoloji", "Fizyoloji", "Biyokimya",
   "Mikrobiyoloji", "Patoloji", "Farmakoloji",
+  "Kardiyoloji", "Göğüs Hastalıkları", "Hematoloji", "Nefroloji",
+  "Onkoloji", "Geriatri", "Endokrinoloji", "Romatoloji", "Hepatoloji",
+  "Gastroenteroloji", "Enfeksiyon Hastalıkları", "Pediatri", "Genel Cerrahi",
+  "Kadın Hastalıkları ve Doğum", "Küçük Stajlar",
 ];
 
 const POTENTIAL_QUESTION_STYLES: Record<string, string> = {
@@ -131,7 +135,7 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
-      const cachedKey = `${isPotential ? "muhtemel-v2::" : ""}${topic || activeCat}`;
+      const cachedKey = `${isPotential ? "muhtemel-v4::" : ""}${topic || activeCat}`;
       const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
       if (cached.length >= Math.min(count, 3)) {
         const cachedQuestions = cached.slice(0, count).map((q) => ({
@@ -162,18 +166,22 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
         ? `\nÇIKMIŞ TUS ŞIK ÖRÜNTÜLERİ:\n${JSON.stringify(optionBank.map((entry) => ({
             topic: entry.topic,
             subtopic: entry.subtopic,
-            examPeriod: entry.examPeriod,
+          examPeriod: entry.examPeriod,
+            examYear: entry.examYear || Number(entry.examPeriod?.slice(0, 4)),
+            ref: entry.id,
+            questionStyle: entry.questionStyle || "",
+            stemTemplate: entry.stemTemplate || "",
             options: entry.options,
-          })))}\nBu bölüm MUHTEMEL SORULAR içindir. Şıkların işaret ettiği yüksek olasılıklı kavramlardan hareketle tamamen yeni soru kökleri oluştur. Kaynak soru köklerini yeniden üretme. Yalnızca seçilen konuya tıbben uyan şıkları doğru cevap veya çeldirici olarak değerlendir; ilgisiz şıkları zorla kullanma ve tek doğru cevap kuralını koru.`
+          })))}\nBu bölüm MUHTEMEL SORULAR içindir. Şıkların işaret ettiği yüksek olasılıklı kavramlardan hareketle tamamen yeni soru kökleri oluştur. Her soruda yararlandığın bir veya daha fazla kaydın ref değerini sourceRefs alanında aynen döndür. questionStyle ve stemTemplate alanlarındaki soyut biçime uy; kaynak soru köklerini yeniden üretme. Yalnızca seçilen konuya tıbben uyan şıkları doğru cevap veya çeldirici olarak değerlendir; ilgisiz şıkları zorla kullanma ve tek doğru cevap kuralını koru.`
         : "";
       const qualityRules = isPotential
-        ? `ÇIKMIŞ TEMEL BİLİMLER SORU BİÇİMİ KURALLARI:
-- Klinik vaka yazmak varsayılan yöntem DEĞİLDİR. Soruların büyük çoğunluğunda "vaka" alanını boş bırak ve doğrudan soru kökü yaz.
-- Hasta yaşı, cinsiyeti, yakınması, fizik muayenesi ve laboratuvar hikâyesi ekleme; yalnızca seçilen şık örüntüsü gerçekten klinik uygulama gerektiriyorsa kısa bir senaryo kullan.
-- Soru köklerini çıkmış TUS Temel Bilimler dilindeki gibi kısa, yoğun ve ayırt edici kur: "Aşağıdakilerden hangisi...?", "... ile ilgili hangisi doğrudur/yanlıştır?", "... sonucunda hangisi artar/azalır?" veya kısa bir deney/preparat öncülü kullan.
-- Her sorunun biçimini, yararlanılan şık grubunun konu ve alt konu etiketine göre seç. Aynı kalıbı bütün sorularda tekrarlama.
+        ? `ÇIKMIŞ TUS SORU BİÇİMİ KURALLARI:
+- Her soruda yararlanılan kaydın questionStyle ve stemTemplate alanlarını esas al. Kaynak doğrudan soruysa "vaka" alanını boş bırak; kaynak klinik vaka biçimindeyse özgün ve kısa bir klinik senaryo kur.
+- Hasta yaşı, cinsiyeti, yakınması, fizik muayenesi ve laboratuvar bilgilerini yalnızca kaynak biçimi ve tıbbi konu gerektiriyorsa kullan. Bütün soruları vaka biçimine dönüştürme.
+- Doğrudan soruları çıkmış TUS dilindeki gibi kısa, yoğun ve ayırt edici kur: "Aşağıdakilerden hangisi...?", "... ile ilgili hangisi doğrudur/yanlıştır?" veya "... sonucunda hangisi artar/azalır?" gibi uygun bir kök kullan.
+- Her sorunun biçimini, yararlanılan şık grubunun konu, alt konu ve soru biçimi etiketlerine göre seç. Aynı kalıbı bütün sorularda tekrarlama.
 - Şıklardan birinin neden doğru, diğerlerinin neden çeldirici olduğunu tıbbi ilişki üzerinden kur; şıklara uyacak yapay bir vaka icat etme.
-- ${POTENTIAL_QUESTION_STYLES[activeCat] || "Temel bilimlere uygun kısa ve doğrudan soru kökleri kullan."}
+- ${POTENTIAL_QUESTION_STYLES[activeCat] || "Kaynak kaydın soru biçimini koruyarak yeni ve özgün bir TUS sorusu oluştur."}
 - Açıklama doğru cevabı ve en az iki yanlış seçeneğin neden elendiğini anlatsın.`
         : `KALİTE KURALLARI:
 - Sorular ezber değil klinik akıl yürütme gerektirsin.
@@ -209,6 +217,7 @@ JSON formatı (başka hiçbir şey yazma):
       "cat": "${activeCat}",
       "diff": "${diff}",
       "tags": ["${topics[0]}"]
+      ${isPotential ? ',\n      "sourceRefs": ["2024-1-temel-q012"]' : ""}
     }
   ]
 }
@@ -218,14 +227,27 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
       const raw = await mistralJSON(prompt, 8000, 0.75);
       const parsed = parseJSON(raw) as { questions?: Q[] };
       const seenInSession = new Set<string>();
+      const optionBankById = new Map(optionBank.map((entry) => [entry.id, entry]));
       const qs: Q[] = (parsed?.questions || [])
-        .map((q) => ({
-          ...q,
-          opts: (q.opts || []).slice(0, 5),
-          ans: Math.min(Math.max(0, q.ans || 0), (q.opts?.length || 5) - 1),
-          visualHtml: cleanVisualHtml(q.visualHtml),
-          visualCaption: (q.visualCaption || "").slice(0, 120),
-        }))
+        .map((q) => {
+          const sourceRefs = isPotential
+            ? [...new Set((q.sourceRefs || []).filter((ref) => optionBankById.has(ref)))].slice(0, 3)
+            : [];
+          const sourceYears = [...new Set(sourceRefs
+            .map((ref) => optionBankById.get(ref))
+            .map((entry) => entry?.examYear || Number(entry?.examPeriod?.slice(0, 4)))
+            .filter((year): year is number => Number.isFinite(year)))].sort();
+          return {
+            ...q,
+            opts: (q.opts || []).slice(0, 5),
+            ans: Math.min(Math.max(0, q.ans || 0), (q.opts?.length || 5) - 1),
+            visualHtml: cleanVisualHtml(q.visualHtml),
+            visualCaption: (q.visualCaption || "").slice(0, 120),
+            sourceRefs,
+            sourceYears,
+          };
+        })
+        .filter((q) => !isPotential || (q.sourceRefs?.length || 0) > 0)
         .filter((q) => {
           // Deduplicate within this batch using vaka first 60 chars + soru first 40 chars
           const key = (q.vaka || "").slice(0, 60) + "|" + (q.soru || "").slice(0, 40);
@@ -481,6 +503,9 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
           <span style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", textTransform: "uppercase" }}>{current + 1} / {questions.length}</span>
           <span className="tag tag-teal" style={{ fontSize: ".6rem" }}>{q.diff}</span>
           <span className="tag tag-gray" style={{ fontSize: ".6rem" }}>{q.cat}</span>
+          {isPotential && q.sourceYears?.length ? (
+            <span className="tag tag-teal" style={{ fontSize: ".6rem" }}>{q.sourceYears.join(", ")} çıkmış soru referansı</span>
+          ) : null}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {timerMode && (

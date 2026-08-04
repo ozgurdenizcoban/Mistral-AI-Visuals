@@ -22,7 +22,6 @@ export default function Layout() {
     return <div className="loading-screen"><div className="loading-orb">A</div><div className="loading-title">ApexTUS</div></div>;
   }
   if (!user) return <AuthOverlay />;
-
   const pages: Record<string, React.ReactNode> = {
     dashboard: <Dashboard />, quiz: <Quiz />, potential: <PotentialQuestions />, mockexam: <MockExam />,
     tusscore: <TusScore />, fulltus: <FullTUS />, notes: <Notes />,
