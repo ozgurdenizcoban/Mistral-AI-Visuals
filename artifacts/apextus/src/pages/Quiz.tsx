@@ -135,16 +135,43 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
 
     try {
       const activeCat = cat === "Karışık" ? TREE[Math.floor(Math.random() * TREE.length)].cat : cat;
-      const cachedKey = `${isPotential ? "muhtemel-v6::" : ""}${topic || activeCat}`;
-      const cached = await fbGetQuestions(cachedKey, diff, count, state.seenQ || {});
-      if (cached.length >= Math.min(count, 3)) {
-        const cachedQuestions = cached.slice(0, count).map((q) => ({
+      const cachedKey = `${isPotential ? "muhtemel-v7::" : ""}${topic || activeCat}`;
+      const cached = await fbGetQuestions(
+        cachedKey,
+        diff,
+        isPotential ? Math.max(count * 6, 30) : count,
+        state.seenQ || {},
+      );
+      const selectedCached = isPotential
+        ? (() => {
+            const byYear = new Map<number, Q[]>();
+            cached.forEach((question) => {
+              const year = question.sourceYears?.[0];
+              if (!year) return;
+              const bucket = byYear.get(year) || [];
+              bucket.push(question as Q);
+              byYear.set(year, bucket);
+            });
+            const years = [...byYear.keys()].sort(() => Math.random() - 0.5);
+            const balanced: Q[] = [];
+            while (balanced.length < count && years.some((year) => (byYear.get(year)?.length || 0) > 0)) {
+              for (const year of years) {
+                const question = byYear.get(year)?.pop();
+                if (question) balanced.push(question);
+                if (balanced.length >= count) break;
+              }
+            }
+            return balanced;
+          })()
+        : cached;
+      if (selectedCached.length >= Math.min(count, 3)) {
+        const cachedQuestions = selectedCached.slice(0, count).map((q) => ({
           ...q,
           visualHtml: cleanVisualHtml(q.visualHtml),
           visualCaption: (q.visualCaption || "").slice(0, 120),
         }));
         setQuestions(await enrichQuestionsWithSourceImages(cachedQuestions, count));
-        markSeenQ(cached.map((q) => q._fid!).filter(Boolean));
+        markSeenQ(selectedCached.map((q) => q._fid!).filter(Boolean));
         setLoading(false);
         if (timerMode) startTimer();
         return;
@@ -162,6 +189,20 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
       if (isPotential && !optionBank.length) {
         throw new Error("Bu ders için şık bankası verisi bulunamadı");
       }
+      const assignedSourceRefs = isPotential
+        ? Array.from({ length: count }, (_, index) => optionBank[index % optionBank.length]?.id)
+            .filter((ref): ref is string => Boolean(ref))
+        : [];
+      const sourceAssignmentsGuide = isPotential
+        ? `\nZORUNLU ANA KAYNAK ATAMALARI:\n${JSON.stringify(assignedSourceRefs.map((ref, index) => {
+            const entry = optionBank.find((item) => item.id === ref);
+            return {
+              questionNumber: index + 1,
+              ref,
+              examYear: entry?.examYear || Number(entry?.examPeriod?.slice(0, 4)),
+            };
+          }))}\nquestions dizisindeki her soruyu, aynı sıradaki atanmış ana kaynağa göre üret ve sourceRefs alanında yalnızca o ref değerini döndür. Atanmış kaynağı veya yılı değiştirme.`
+        : "";
       const optionBankGuide = isPotential
         ? `\nÇIKMIŞ TUS ŞIK ÖRÜNTÜLERİ:\n${JSON.stringify(optionBank.map((entry) => ({
             topic: entry.topic,
@@ -172,7 +213,7 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
             questionStyle: entry.questionStyle || "",
             stemTemplate: entry.stemTemplate || "",
             options: entry.options,
-          })))}\nBu bölüm MUHTEMEL SORULAR içindir. Şıkların işaret ettiği yüksek olasılıklı kavramlardan hareketle tamamen yeni soru kökleri oluştur. Her soru için yalnızca bir ana kaynak kaydı seç ve onun ref değerini sourceRefs alanında tek eleman olarak aynen döndür. questionStyle ve stemTemplate alanlarındaki soyut biçime uy; kaynak soru köklerini yeniden üretme. Yalnızca seçilen konuya tıbben uyan şıkları doğru cevap veya çeldirici olarak değerlendir; ilgisiz şıkları zorla kullanma ve tek doğru cevap kuralını koru.`
+          })))}\nBu bölüm MUHTEMEL SORULAR içindir. Şıkların işaret ettiği yüksek olasılıklı kavramlardan hareketle tamamen yeni soru kökleri oluştur. Her soru için aşağıdaki zorunlu atama listesinde verilen ana kaynak kaydını kullan. questionStyle ve stemTemplate alanlarındaki soyut biçime uy; kaynak soru köklerini yeniden üretme. Yalnızca seçilen konuya tıbben uyan şıkları doğru cevap veya çeldirici olarak değerlendir; ilgisiz şıkları zorla kullanma ve tek doğru cevap kuralını koru.`
         : "";
       const qualityRules = isPotential
         ? `ÇIKMIŞ TUS SORU BİÇİMİ KURALLARI:
@@ -197,6 +238,7 @@ KATEGORİ: ${activeCat}
 KONULAR: ${topics.join(", ")}
 ${sourceGuide}
 ${optionBankGuide}
+${sourceAssignmentsGuide}
 ${qualityRules}
 - Sadece gorsel gercekten klinik akil yurutmeyi guclendiriyorsa visualHtml ekle. AI cizimi gerekiyorsa guvenli inline <svg> veya <div class="quiz-ai-diagram"> kullan; gereksizse visualHtml bos string olsun. Sistem uygun konularda ayrica Wikipedia/Wikimedia gorseli ekleyebilir.
 - visualHtml zemini daima beyaz veya cok acik olsun. Siyah/koyu genel arka plan kullanma. Tum metinler koyu ve yuksek kontrastli, oklar ve baglanti cizgileri belirgin koyu mor olsun. Koyu zemin ustune koyu yazi veya acik zemin ustune beyaz yazi ASLA kullanma.
@@ -229,9 +271,10 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
       const seenInSession = new Set<string>();
       const optionBankById = new Map(optionBank.map((entry) => [entry.id, entry]));
       const qs: Q[] = (parsed?.questions || [])
-        .map((q) => {
-          const sourceRefs = isPotential
-            ? [...new Set((q.sourceRefs || []).filter((ref) => optionBankById.has(ref)))].slice(0, 1)
+        .map((q, index) => {
+          const assignedRef = assignedSourceRefs[index];
+          const sourceRefs = isPotential && assignedRef && optionBankById.has(assignedRef)
+            ? [assignedRef]
             : [];
           const sourceYears = [...new Set(sourceRefs
             .map((ref) => optionBankById.get(ref))
