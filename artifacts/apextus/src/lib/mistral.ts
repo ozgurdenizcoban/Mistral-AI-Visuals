@@ -1,6 +1,6 @@
 import { auth } from "@/lib/firebase";
 
-const AI_URL = "/.netlify/functions/ai";
+const AI_URL = "/api/ai";
 const REQUEST_TIMEOUT_MS = 240000;
 
 // Serializing queue — prevents concurrent calls from bypassing the rate limit

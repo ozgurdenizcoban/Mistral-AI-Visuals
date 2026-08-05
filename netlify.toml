@@ -9,6 +9,11 @@
   BASE_PATH = "/"
 
 [[redirects]]
+  from = "/api/ai"
+  to = "/.netlify/functions/ai"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
