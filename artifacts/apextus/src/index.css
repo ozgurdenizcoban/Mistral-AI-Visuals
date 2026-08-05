@@ -2032,6 +2032,85 @@ button, input, select, textarea { font-family: inherit; letter-spacing: 0; }
 .nb strong,.ai-topic-note strong { color:#171827 !important; }
 .nb ul li::before,.ai-topic-note ul li::before { color:#4f35ae !important; font-weight:900 !important; }
 
+/* Evidence-backed topic notes. */
+.nb .exam-ref,
+.ai-topic-note .exam-ref {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid #b7d6ef;
+  border-left: 4px solid #3578c5;
+  border-radius: 8px;
+  background: #f1f7fd !important;
+  color: #173f68 !important;
+  font-size: .82rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.nb .exam-ref *, .ai-topic-note .exam-ref * { color: inherit !important; }
+.nb .exam-ref-id, .ai-topic-note .exam-ref-id {
+  display: block;
+  margin-top: 5px;
+  color: #52677d !important;
+  font-size: .68rem;
+  font-weight: 700;
+}
+.nb .likely,
+.ai-topic-note .likely {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid #ddc88d;
+  border-left: 4px solid #b77a17;
+  border-radius: 8px;
+  background: #fff9e9 !important;
+  color: #68450b !important;
+  font-size: .82rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.nb .likely *, .ai-topic-note .likely * { color: inherit !important; }
+
+/* Global mobile safety: every screen stays inside the viewport. */
+html, body, #root, .app-shell, .app-workspace, .app-main { max-width: 100%; }
+img, video, canvas { max-width: 100%; height: auto; }
+svg { max-width: 100%; }
+button, input, select, textarea { min-width: 0; max-width: 100%; }
+.panel, .card, .vc, .acc-section, .edu-section, .nb, .ai-topic-note { min-width: 0; }
+
+@media (max-width: 600px) {
+  html { font-size: 16px; }
+  .app-topbar { height: 58px; padding: 0 10px; gap: 8px; }
+  .app-main { width: 100%; padding: 14px 10px 36px; }
+  .page-title { font-size: 1.45rem; line-height: 1.25; }
+  .panel, .card, .vc, .acc-section, .edu-section { padding: 14px !important; border-radius: 9px; }
+  .btn-row, .task-actions, .print-btn-row, .focus-card-actions { flex-wrap: wrap; }
+  .btn-row > button, .task-actions > button, .print-btn-row > button { min-height: 44px; }
+  .nb, .ai-topic-note {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    font-size: .92rem;
+    line-height: 1.72;
+  }
+  .nb h2, .ai-topic-note h2 { font-size: 1.08rem; line-height: 1.35; margin-top: 22px; }
+  .nb h3, .ai-topic-note h3 { font-size: .78rem; line-height: 1.45; letter-spacing: .035em; }
+  .nb p, .nb li, .ai-topic-note p, .ai-topic-note li { line-height: 1.7; }
+  .nb .tip, .nb .warn, .nb .algo, .nb .mnem, .nb .score-box,
+  .nb .exam-ref, .nb .likely,
+  .ai-topic-note .tip, .ai-topic-note .warn, .ai-topic-note .algo,
+  .ai-topic-note .mnem, .ai-topic-note .score-box,
+  .ai-topic-note .exam-ref, .ai-topic-note .likely {
+    padding: 11px 12px;
+    margin: 9px 0;
+    font-size: .86rem;
+  }
+  .edu-diagram { max-width: 100%; padding: 12px !important; overflow-x: auto; }
+  .edu-diagram .ed-row, .edu-diagram .ed-compare { grid-template-columns: 1fr !important; }
+  .note-data-card { grid-template-columns: 1fr; }
+  .note-data-field { border-right: 0 !important; }
+  .topic-note-reader-scroll { padding: 6px 0 18px; }
+  .topic-note-reader-content { padding: 13px 10px; border-left: 0; border-right: 0; border-radius: 0; }
+}
+
 /* ApexTUS professional medical-performance wordmark. */
 .brand-block { gap:12px !important; padding:0 7px !important; }
 .brand-mark {

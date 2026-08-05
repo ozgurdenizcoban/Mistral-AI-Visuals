@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { TREE, LINK_MAP, SR_INTERVALS } from "@/lib/data";
 import { mistralCompleteText, mistralText } from "@/lib/mistral";
-import { fbGetNote, fbSaveNote, fbDeleteNote } from "@/lib/firestore";
+import { fbGetNote, fbSaveNote, fbDeleteNote, fbGetOptionBank, OptionBankEntry } from "@/lib/firestore";
 import { fetchMedicalImage, getTopicDiagramQuery } from "@/lib/imageGen";
 import { getSourceGuide } from "@/lib/sourceGuides";
 import { getMandatoryNoteAnchors, getNoteCoverageContract, NoteGenerationPart } from "@/lib/noteCoverage";
@@ -12,11 +12,35 @@ import { Maximize2, X } from "lucide-react";
 
 const noteCache: Record<string, string> = {};
 const notePartCache: Record<string, string[]> = {};
-const NOTE_SCHEMA_VERSION = 4;
+const NOTE_SCHEMA_VERSION = 5;
 const NOTE_PART_COUNT = 10;
 
 function partialNoteKey(topic: string) {
-  return `apextus-note-parts-v4:${topic}`;
+  return `apextus-note-parts-v5:${topic}`;
+}
+
+const SUPER_CHARS: Record<string, string> = {
+  "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+  "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹",
+  "+": "⁺", "-": "⁻",
+};
+const SUB_CHARS: Record<string, string> = {
+  "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄",
+  "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉",
+  "+": "₊", "-": "₋",
+};
+
+function normalizeMedicalNotation(rawHtml: string) {
+  const toChars = (value: string, map: Record<string, string>) =>
+    value.split("").map((char) => map[char] || char).join("");
+  return rawHtml
+    .replace(/\\mathrm\{([^}]+)\}/g, "$1")
+    .replace(/\\mu\b/g, "µ")
+    .replace(/\$([^$]+)\$/g, "$1")
+    .replace(/\^\{([0-9+\-]+)\}/g, (_, value: string) => toChars(value, SUPER_CHARS))
+    .replace(/\^([0-9]*[+\-])/g, (_, value: string) => toChars(value, SUPER_CHARS))
+    .replace(/_\{([0-9+\-]+)\}/g, (_, value: string) => toChars(value, SUB_CHARS))
+    .replace(/_([0-9]+)/g, (_, value: string) => toChars(value, SUB_CHARS));
 }
 
 function loadPartialNoteParts(topic: string) {
@@ -61,7 +85,7 @@ function repairBrokenPartBoundaries(rawHtml: string) {
 }
 
 function prepareNoteContent(rawHtml: string): PreparedNote {
-  const stripped = repairBrokenPartBoundaries(rawHtml)
+  const stripped = repairBrokenPartBoundaries(normalizeMedicalNotation(rawHtml))
     .replace(/^```(?:html)?\s*/i, "")
     .replace(/\s*```\s*$/, "")
     .trim()
@@ -119,7 +143,7 @@ function prepareNoteContent(rawHtml: string): PreparedNote {
 }
 
 function prepareNoteForReading(rawHtml: string) {
-  const doc = new DOMParser().parseFromString(rawHtml, "text/html");
+  const doc = new DOMParser().parseFromString(normalizeMedicalNotation(rawHtml), "text/html");
   const tables = Array.from(doc.querySelectorAll("table")).reverse();
   tables.forEach((table) => {
     table.removeAttribute("width");
@@ -392,11 +416,14 @@ export default function Notes() {
         "Ayırıcı tanı karşılaştırmaları yazılıyor",
         "TUS spotları ve aktif hatırlama yazılıyor",
       ];
+      setNoteStage("Çıkmış soru örüntüleri analiz ediliyor");
+      const optionBank = await fbGetOptionBank(cat, 60);
+      const examEvidence = buildExamEvidence(topic, optionBank);
       const completedParts = loadPartialNoteParts(topic);
       for (let index = completedParts.length; index < NOTE_PART_COUNT; index += 1) {
         const part = (index + 1) as NoteGenerationPart;
         setNoteStage(`${stageLabels[index]} (${part}/${NOTE_PART_COUNT})`);
-        const generatedPart = await mistralCompleteText(buildNotePrompt(cat, topic, part), 2200, 0.18);
+        const generatedPart = await mistralCompleteText(buildNotePrompt(cat, topic, part, examEvidence), 2200, 0.18);
         completedParts.push(prepareNoteContent(cleanContent(generatedPart)).html);
         savePartialNoteParts(topic, completedParts);
       }
@@ -407,7 +434,7 @@ export default function Notes() {
           missingAnchors.slice(index * 5, index * 5 + 5));
         for (let index = 0; index < batches.length; index += 1) {
           setNoteStage(`Eksik alt başlıklar tamamlanıyor (${index + 1}/${batches.length})`);
-          const supplement = await mistralCompleteText(buildCoverageSupplementPrompt(cat, topic, batches[index]), 2200, 0.16);
+          const supplement = await mistralCompleteText(buildCoverageSupplementPrompt(cat, topic, batches[index], examEvidence), 2200, 0.16);
           html += `\n${cleanContent(supplement)}`;
         }
       }
@@ -464,12 +491,12 @@ export default function Notes() {
   }
 
   function cleanContent(s: string) {
-    return s
+    return normalizeMedicalNotation(s
       .replace(/^```(?:html)?\s*/i, "")
       .replace(/\s*```\s*$/, "")
       .trim()
       .replace(/\\n/g, "")
-      .replace(/\\t/g, " ");
+      .replace(/\\t/g, " "));
   }
 
   function curateMnemonics(html: string) {
@@ -694,7 +721,58 @@ const PROFESSIONAL_NOTE_STANDARD = `PROFESYONEL NOT STANDARDI:
 - Karar agaclari metin cizimi degil, ogrencinin takip edebilecegi iki kollu secim diyagrami gibi tasarlansin.
 - Sayisal esikler, skorlar, dozlar, laboratuvar referanslari ve klasik bulgular atlanmasin.
 - Gereksiz genel kultur anlatimi yapma; sinavda puan getirecek bilgiye yogunlas.`;
-function buildNotePrompt(cat: string, topic: string, part: NoteGenerationPart): string {
+
+function buildExamEvidence(topic: string, entries: OptionBankEntry[]) {
+  if (!entries.length) {
+    return `ÇIKMIŞ SORU KANITI: Bu ders için doğrulanmış kayıt bulunamadı. Yıl veya çıkmış soru iddiası üretme; yalnızca "Bu da çıkabilir" başlığı altında gerekçeli tahmin yaz.`;
+  }
+  const normalize = (value = "") => value
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const topicKey = normalize(topic);
+  const scored = entries.map((entry) => {
+    const searchable = normalize(`${entry.topic || ""} ${entry.subtopic || ""}`);
+    const score = searchable.includes(topicKey) || topicKey.includes(searchable) ? 2
+      : topicKey.split(" ").some((word) => word.length > 3 && searchable.includes(word)) ? 1
+      : 0;
+    return { entry, score };
+  });
+  const byYear = new Map<number, typeof scored>();
+  scored.forEach((item) => {
+    const year = item.entry.examYear || Number(item.entry.examPeriod?.slice(0, 4));
+    if (!Number.isFinite(year)) return;
+    const bucket = byYear.get(year) || [];
+    bucket.push(item);
+    byYear.set(year, bucket);
+  });
+  byYear.forEach((bucket) => bucket.sort((a, b) => b.score - a.score));
+  const years = [...byYear.keys()].sort((a, b) => b - a);
+  const selected: typeof scored = [];
+  while (selected.length < 15 && years.some((year) => (byYear.get(year)?.length || 0) > 0)) {
+    for (const year of years) {
+      const item = byYear.get(year)?.shift();
+      if (item) selected.push(item);
+      if (selected.length >= 15) break;
+    }
+  }
+  const evidence = selected.map(({ entry, score }) => ({
+    ref: entry.id,
+    year: entry.examYear || Number(entry.examPeriod?.slice(0, 4)),
+    period: entry.examPeriod,
+    topic: entry.topic,
+    subtopic: entry.subtopic,
+    questionStyle: entry.questionStyle || "",
+    stemTemplate: entry.stemTemplate || "",
+    options: entry.options,
+    relevance: score === 2 ? "doğrudan ilgili" : score === 1 ? "ilişkili" : "yalnızca dersin soru biçimi",
+  }));
+  return `DOĞRULANMIŞ ÇIKMIŞ SORU KANIT PAKETİ (soru kökü değil; etiket, biçim ve şık örüntüsü):\n${JSON.stringify(evidence)}`;
+}
+
+function buildNotePrompt(cat: string, topic: string, part: NoteGenerationPart, examEvidence: string): string {
   const sectionsByPart: Record<NoteGenerationPart, string> = {
     1: `<h2>1. Tanım, Epidemiyoloji ve Etiyoloji</h2>`,
     2: `<h2>2. Patofizyoloji</h2>`,
@@ -718,6 +796,20 @@ ${PROFESSIONAL_NOTE_STANDARD}
 
 ${getSourceGuide(cat, topic)}
 
+${examEvidence}
+
+ÇIKMIŞ SORU ODAKLI YAZIM SÖZLEŞMESİ:
+- Kanıt paketindeki topic, subtopic, questionStyle, stemTemplate ve options alanlarını birlikte analiz et. Anlatımın ağırlığını gerçekten sınanan kavramlara, ayırıcı bilgilere ve çeldiricilere göre belirle; buna rağmen konu kapsamını daraltma ve ayrıntılı ana kaynak düzeyini koru.
+- Yalnızca relevance alanı "doğrudan ilgili" veya "ilişkili" olan kayıtları çıkmış soru kanıtı olarak göster. "yalnızca dersin soru biçimi" kayıtlarını anlatım üslubunu anlamak için kullan; bunlarla konuya ait çıkmış soru iddiası kurma.
+- Kanıtta o bölümle ilgili kayıt varsa ilgili bilginin hemen ardından şu yapıyı kullan: <div class="exam-ref"><strong>Çıkmış soru odağı — [YIL]:</strong> Bu kayıtta ölçülen kavramı ve ayırıcı noktayı özgün cümleyle açıkla. <span class="exam-ref-id">Kaynak: [ref]</span></div>
+- Birden fazla yıl aynı kavramı destekliyorsa yalnızca kanıt paketinde bulunan yılları yaz: <strong>Çıkmış soru odağı — 2023, 2024, 2025:</strong>. Kanıtta olmayan yılı, soru biçimini veya konuyu ASLA uydurma.
+- Çıkmış sorunun kökünü ya da seçeneklerini aynen yeniden yazma. Hangi bilginin, ilişkinin veya ayrımın sınandığını öğretici biçimde açıkla.
+- Örüntüden hareketle yakın gelecekte sorulabilecek, henüz kanıt paketinde doğrudan sorulduğu gösterilmeyen noktaları şu yapıyla belirt: <div class="likely"><strong>Bu da çıkabilir:</strong> Tahmini bilgi + neden aday olduğu + nasıl çeldirici kurulabileceği.</div>
+- “Bu da çıkabilir” kesin bilgi veya ÖSYM iddiası değildir; tıbbi gerekçeye ve kanıttaki soru örüntüsüne dayanan bir tahmindir. Her ana bölümde en fazla 2 güçlü tahmin kullan; dolgu tahmin üretme.
+- questionStyle ve stemTemplate doğrudan soru biçimindeyse gereksiz vaka anlatma; klinik vaka biçimindeyse bulgu sırasını ve ayırıcı tanı mantığını öğret. Notun dili, çıkmış TUS sorularının kısa ve ayırt edici mantığını açıklamalı; konu anlatımı ise ayrıntılı kalmalıdır.
+- Son yanıtı yayımlamadan önce Türkçe yazım, noktalama, anlatım bozukluğu, tıbbi terim ve sayısal tutarlılık denetimi yap. Eksik ek, bozuk tamlama, gereksiz büyük harf ve yapay başlık kullanma.
+- LaTeX ve Markdown matematik gösterimi KULLANMA. Dolar işareti, ters eğik çizgi, ^{...} veya _{...} yazma. İyonları ve kimyasal ifadeleri doğrudan Unicode ile yaz: K⁺, Na⁺, Ca²⁺, Mg²⁺, Cl⁻, HCO₃⁻.
+
 ${getNoteCoverageContract(cat, topic, part)}
 
 KESİN KURAL — ATLANAMAZ BİLGİLER:
@@ -735,6 +827,8 @@ KESİN KURAL — ATLANAMAZ BİLGİLER:
 - <ul><li>madde</li></ul> | <table> tablolar için
 - <div class="tip"><strong>TUS SPOT:</strong> ...</div>
 - <div class="warn"><strong>DİKKAT:</strong> ...</div>
+- <div class="exam-ref"><strong>Çıkmış soru odağı — [yalnızca kanıttaki yıl]:</strong> ... <span class="exam-ref-id">Kaynak: [kanıttaki ref]</span></div>
+- <div class="likely"><strong>Bu da çıkabilir:</strong> ...</div>
 - <div class="algo"><strong>ALGORİTMA:</strong> Adım 1 → Adım 2 → Adım 3 (tanı/tedavi akış diyagramı)</div>
 - Karar agaci icin <pre>, <code>, ASCII cizim, dal karakterleri veya tek parca metin agaci kullanma. Bunun yerine asagidaki TANI / KARAR ALGORITMASI edu-diagram sablonunu kullan.
 - MNEMONİK ZORUNLU DEĞİLDİR. Konu doğal ve güvenilir bir hatırlatma tekniğine uygun değilse hiç mnemonic yazma.
@@ -881,7 +975,7 @@ UZUNLUK VE DERİNLİK KURALI:
 Şimdi başla:`;
 }
 
-function buildCoverageSupplementPrompt(cat: string, topic: string, missingAnchors: string[]) {
+function buildCoverageSupplementPrompt(cat: string, topic: string, missingAnchors: string[], examEvidence: string) {
   return `Sen kıdemli bir TUS ders kitabı editörüsün. Aşağıdaki konu notunun kapsam denetiminde eksik kalan alt başlıkları tamamla.
 
 DERS: ${cat}
@@ -889,9 +983,14 @@ KONU: ${topic}
 EKSİK BAŞLIKLAR:
 ${missingAnchors.map((anchor) => `- ${anchor}`).join("\n")}
 
+${examEvidence}
+
 SADECE HTML döndür. <h2>14. Kapsam Tamamlama</h2> ile başla.
 Her eksik öğeyi ayrı <h3> başlığında ele al. Mikrobiyal etkenlerde morfoloji/boyanma, kültür-biyokimya, virülans/toksin, bulaş, klinik hastalıklar, tanı, ilk seçenek tedavi, direnç ve korunmayı yaz.
-Her başlık en az bir açıklayıcı paragraf, yüksek verimli madde listesi ve bir TUS ayırt ettirici ipucu içersin. "vb.", "diğerleri" veya yalnızca isim listesi kullanma. Diyagram ekleme. Markdown kullanma.`;
+Her başlık en az bir açıklayıcı paragraf, yüksek verimli madde listesi ve bir TUS ayırt ettirici ipucu içersin. "vb.", "diğerleri" veya yalnızca isim listesi kullanma. Diyagram ekleme. Markdown kullanma.
+Yalnızca relevance alanı doğrudan ilgili veya ilişkili olan kanıtlarda <div class="exam-ref"><strong>Çıkmış soru odağı — [YIL]:</strong> ... <span class="exam-ref-id">Kaynak: [ref]</span></div> kullan. Kanıtta olmayan yıl veya konu uydurma.
+Güçlü bir yakın soru adayı varsa <div class="likely"><strong>Bu da çıkabilir:</strong> ...</div> biçiminde ve tahmin olduğunu açık ederek yaz.
+Türkçe yazım ve tıbbi doğruluk denetimi yap. LaTeX, dolar işareti, ^ veya _ gösterimi kullanma; K⁺, Na⁺, Ca²⁺, HCO₃⁻ gibi Unicode yaz.`;
 }
 
 function buildLinkPrompt(cat: string, topic: string): string {
