@@ -1,6 +1,7 @@
 [build]
   command = "pnpm --filter @workspace/apextus build"
   publish = "artifacts/apextus/dist/public"
+  functions = "artifacts/apextus/netlify/functions"
 
 [build.environment]
   NODE_VERSION = "22"

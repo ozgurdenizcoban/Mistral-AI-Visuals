@@ -1,5 +1,6 @@
-const MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY as string;
-const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
+import { auth } from "@/lib/firebase";
+
+const AI_URL = "/.netlify/functions/ai";
 const REQUEST_TIMEOUT_MS = 240000;
 
 // Serializing queue — prevents concurrent calls from bypassing the rate limit
@@ -22,30 +23,25 @@ async function mistralCall(
   await new Promise((r) => setTimeout(r, 300));
 
   try {
-    if (!MISTRAL_API_KEY?.trim()) {
-      throw new Error("AI bağlantı anahtarı eksik. Site yöneticisine bildir.");
-    }
-
     const body: Record<string, unknown> = {
-      model: "mistral-large-latest",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: Math.min(maxTokens, 16000),
+      prompt,
+      maxTokens: Math.min(maxTokens, 12000),
       temperature: temp,
+      jsonMode,
     };
-
-    if (jsonMode) {
-      body.response_format = { type: "json_object" };
-    }
 
     async function doFetch(requestBody: Record<string, unknown>) {
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       try {
-        return await fetch(MISTRAL_URL, {
+        const user = auth.currentUser;
+        if (!user) throw new Error("AI kullanmak için giriş yapmalısınız.");
+        const idToken = await user.getIdToken();
+        return await fetch(AI_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${MISTRAL_API_KEY}`,
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
@@ -80,16 +76,16 @@ async function mistralCall(
           const ed = await resp.json();
           et = ed?.message || ed?.error?.message || et;
         } catch (_) {}
-        if (resp.status === 401 || resp.status === 403) et = "AI erişim anahtarı geçersiz veya yetkisiz.";
-        if (resp.status === 402) et = "Mistral kullanım bakiyesi yetersiz.";
+        if (resp.status === 401 || resp.status === 403) et = "AI erişimi için oturumunuzu yenileyin.";
+        if (resp.status === 402) et = "AI kullanım bakiyesi yetersiz.";
         if (resp.status === 429) et = "AI kullanım sınırına ulaşıldı. Bir dakika sonra yeniden dene.";
         throw new Error(et);
       }
       return resp.json();
     }
 
-    let data = await request(body);
-    let content = data?.choices?.[0]?.message?.content?.trim() || "";
+    const data = await request(body);
+    const content = data?.content?.trim() || "";
     if (content.length < 5) throw new Error("Boş yanıt");
 
     // A bounded note part is still useful when the provider reaches its token
