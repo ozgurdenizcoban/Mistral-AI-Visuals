@@ -54,6 +54,7 @@ export default function AuthOverlay() {
       const cred = await createUserWithEmailAndPassword(auth, regEmail.trim(), regPass);
       const uname = regName.trim().toLowerCase().replace(/\s+/g, ".");
       await fbSaveProfile(cred.user.uid, {
+        uid: cred.user.uid,
         name: regName.trim(),
         username: uname,
         email: regEmail.trim(),

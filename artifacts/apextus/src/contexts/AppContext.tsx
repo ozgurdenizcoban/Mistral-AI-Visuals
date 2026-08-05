@@ -7,6 +7,7 @@ import {
 } from "@/lib/firestore";
 import { toDay, prevDay } from "@/lib/utils";
 import { TREE, FREE_LIMITS, CAT_MIGRATE } from "@/lib/data";
+import { AccessPlan, getMyAccess } from "@/lib/access";
 
 export interface SREntry {
   level: number;
@@ -56,7 +57,9 @@ export interface AppState {
   noteCount: number;
   personalNotes: PersonalNoteVolume[];
   aiExplainCount: number;
-  plan: "free" | "weekly" | "monthly";
+  dailyQuizDate: string;
+  dailyQuizCount: number;
+  plan: AccessPlan;
   planExpiry?: string;
 }
 
@@ -78,13 +81,16 @@ interface AppContextValue {
   quizTarget: { cat: string; topic: string } | null;
   setQuizTarget: (t: { cat: string; topic: string } | null) => void;
   fbReady: boolean;
+  isAdmin: boolean;
+  refreshAccess: () => Promise<void>;
 }
 
 function emptyState(): AppState {
   return {
     total: 0, correct: 0, streak: 0, lastDate: "", byCat: {},
     sessions: [], sr: {}, mistakes: {}, seenQ: {}, noteCount: 0,
-    personalNotes: [], aiExplainCount: 0, plan: "free", planExpiry: "",
+    personalNotes: [], aiExplainCount: 0, dailyQuizDate: "", dailyQuizCount: 0,
+    plan: "free", planExpiry: "",
   };
 }
 
@@ -109,6 +115,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
   const [fbReady, setFbReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [state, setStateRaw] = useState<AppState>(emptyState());
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [noteTarget, setNoteTarget] = useState<{ cat: string; icon: string; topic: string } | null>(null);
@@ -116,6 +123,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userRef = useRef<User | null>(null);
   const stateRef = useRef<AppState>(emptyState());
+
+  const refreshAccess = useCallback(async () => {
+    const access = await getMyAccess();
+    setIsAdmin(access.isAdmin);
+    setStateRaw((prev) => {
+      const next = { ...prev, plan: access.plan, planExpiry: access.expiresAt };
+      stateRef.current = next;
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     userRef.current = user;
@@ -170,33 +187,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               noteCount: typeof raw.noteCount === "number" ? raw.noteCount : 0,
               personalNotes: Array.isArray(raw.personalNotes) ? raw.personalNotes as PersonalNoteVolume[] : [],
               aiExplainCount: typeof raw.aiExplainCount === "number" ? raw.aiExplainCount : 0,
+              dailyQuizDate: (raw.dailyQuizDate as string) || "",
+              dailyQuizCount: typeof raw.dailyQuizCount === "number" ? raw.dailyQuizCount : 0,
               plan: (raw.plan as AppState["plan"]) || "free",
               planExpiry: (raw.planExpiry as string) || "",
             };
             stateRef.current = merged;
             setStateRaw(merged);
           }
+          await refreshAccess();
         } catch (_) {}
         setFbReady(true);
       } else {
         setUser(null);
         setUsername("");
         setStateRaw(emptyState());
+        setIsAdmin(false);
         setFbReady(false);
       }
       setLoading(false);
     });
     return unsub;
-  }, []);
+  }, [refreshAccess]);
 
-  // All features are currently free for all users
-  const isPro = useCallback(() => true, []);
+  const isPro = useCallback(() => {
+    if (isAdmin) return true;
+    const current = stateRef.current;
+    if (current.plan === "free") return false;
+    if (!current.planExpiry) return true;
+    return Date.parse(current.planExpiry) > Date.now();
+  }, [isAdmin]);
 
   const checkLimit = useCallback(
     (type: "quiz" | "notes" | "aiExplain") => {
       if (isPro()) return true;
       const s = stateRef.current;
-      if (type === "quiz") return (s.total || 0) < FREE_LIMITS.quiz;
+      if (type === "quiz") {
+        const usedToday = s.dailyQuizDate === toDay() ? (s.dailyQuizCount || 0) : 0;
+        return usedToday < FREE_LIMITS.quiz;
+      }
       if (type === "notes") return (s.noteCount || 0) < FREE_LIMITS.notes;
       if (type === "aiExplain") return (s.aiExplainCount || 0) < FREE_LIMITS.aiExplain;
       return true;
@@ -259,6 +288,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         user, username, setUsername, loading, state, setState: setStateRaw, saveState,
         isPro, checkLimit, markSeenQ, currentPage, setCurrentPage,
         noteTarget, setNoteTarget, quizTarget, setQuizTarget, fbReady,
+        isAdmin, refreshAccess,
       }}
     >
       {children}

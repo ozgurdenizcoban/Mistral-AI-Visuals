@@ -250,7 +250,6 @@ export const LINK_MAP: Record<string, LinkEntry[]> = {
   ],
 };
 
-export const ADMIN_EMAILS = ["seninmail@gmail.com", "ozgurdenizzcoban@gmail.com"];
 
 /* TUS Klinik Bilimler dahiliye soru dağılımı (100 Klinik sorudan dahiliye payı) */
 export const TUS_KLINIK_WEIGHTS: Record<string, number> = {

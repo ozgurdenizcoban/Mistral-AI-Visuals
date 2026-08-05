@@ -1,27 +1,14 @@
+import { verifyFirebaseUser } from "./firebase-auth.mjs";
+
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
-const FIREBASE_API_KEY = "AIzaSyCJfMeHrFgpmssdnZtxoI64nUK-2MNUq-k";
 
 function json(status, body) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
-}
-
-async function verifyFirebaseUser(request) {
-  const authorization = request.headers.get("authorization") || "";
-  const idToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-  if (!idToken) return false;
-  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ idToken }),
-  });
-  if (!response.ok) return false;
-  const data = await response.json();
-  return Array.isArray(data.users) && data.users.length > 0;
 }
 
 async function callGemini({ prompt, maxTokens, temperature, jsonMode }, env) {

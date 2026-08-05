@@ -4,10 +4,10 @@ import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 import { fbSaveProfile } from "@/lib/firestore";
 import { toast } from "sonner";
-import { ADMIN_EMAILS } from "@/lib/data";
+import { AccessPlan, getUserAccess, updateUserAccess } from "@/lib/access";
 
 export default function Account() {
-  const { user, username, setUsername, state, saveState, isPro } = useApp();
+  const { user, username, setUsername, state, saveState, isAdmin, refreshAccess } = useApp();
   const [tab, setTab] = useState<"profile" | "security" | "data" | "admin">("profile");
   const [oldPass, setOldPass] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -19,11 +19,11 @@ export default function Account() {
 
   // Admin: set plan
   const [adminUid, setAdminUid] = useState("");
-  const [adminPlan, setAdminPlan] = useState<"free" | "weekly" | "monthly">("monthly");
+  const [adminPlan, setAdminPlan] = useState<AccessPlan>("monthly");
   const [adminExpiry, setAdminExpiry] = useState("");
+  const [adminRole, setAdminRole] = useState(false);
+  const [adminLookupLoading, setAdminLookupLoading] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
-
-  const isAdmin = ADMIN_EMAILS.includes(user?.email || "");
 
   async function handleSaveName(e: React.FormEvent) {
     e.preventDefault();
@@ -70,20 +70,36 @@ export default function Account() {
     if (!adminUid.trim()) { toast.error("UID giriniz"); return; }
     setAdminLoading(true);
     try {
-      const { getDoc, setDoc, doc } = await import("firebase/firestore");
-      const { db } = await import("@/lib/firebase");
-      const snap = await getDoc(doc(db, "users", adminUid.trim()));
-      const existing = snap.exists() ? snap.data() : {};
-      await setDoc(doc(db, "users", adminUid.trim()), {
-        ...existing,
+      const saved = await updateUserAccess({
+        uid: adminUid.trim(),
         plan: adminPlan,
-        planExpiry: adminExpiry,
+        expiresAt: adminExpiry ? new Date(`${adminExpiry}T23:59:59`).toISOString() : undefined,
+        isAdmin: adminRole,
       });
-      toast.success(`Plan güncellendi: ${adminUid} → ${adminPlan}`);
+      if (saved.uid === user?.uid) await refreshAccess();
+      setAdminExpiry(saved.expiresAt ? saved.expiresAt.slice(0, 10) : "");
+      toast.success(`Erişim güncellendi: ${saved.uid} → ${saved.plan}`);
     } catch (e) {
-      toast.error("Plan güncellenemedi: " + (e as Error).message);
+      toast.error("Erişim güncellenemedi: " + (e as Error).message);
     } finally {
       setAdminLoading(false);
+    }
+  }
+
+  async function handleLookupUser() {
+    const uid = adminUid.trim();
+    if (!uid) { toast.error("UID giriniz"); return; }
+    setAdminLookupLoading(true);
+    try {
+      const record = await getUserAccess(uid);
+      setAdminPlan(record.plan);
+      setAdminExpiry(record.expiresAt ? record.expiresAt.slice(0, 10) : "");
+      setAdminRole(record.isAdmin);
+      toast.success("Kullanıcı erişimi yüklendi");
+    } catch (e) {
+      toast.error("Kullanıcı getirilemedi: " + (e as Error).message);
+    } finally {
+      setAdminLookupLoading(false);
     }
   }
 
@@ -219,6 +235,16 @@ export default function Account() {
                   {Object.values(state.sr || {}).filter((v) => (v.studyCount || 0) > 0).length}
                 </div>
               </div>
+              <div>
+                <div className="acc-label">Plan</div>
+                <div className="acc-value">{state.plan}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 16, padding: 12, background: "var(--ink3)", borderRadius: 9 }}>
+              <div className="acc-label">Benzersiz Kullanıcı UID</div>
+              <code style={{ display: "block", marginTop: 6, color: "var(--teal)", fontSize: ".75rem", overflowWrap: "anywhere" }}>
+                {user?.uid || "—"}
+              </code>
             </div>
           </div>
 
@@ -283,12 +309,23 @@ export default function Account() {
             className="auth-input" value={adminUid}
             onChange={(e) => setAdminUid(e.target.value)} placeholder="Firebase UID"
           />
+          <button
+            className="btn btn-ghost"
+            style={{ marginTop: 8 }}
+            onClick={handleLookupUser}
+            disabled={adminLookupLoading}
+          >
+            {adminLookupLoading ? <><span className="spin" />Yükleniyor...</> : "UID ile Kullanıcıyı Getir"}
+          </button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
             <div>
               <div style={{ fontSize: ".72rem", fontWeight: 800, color: "var(--t3)", marginBottom: 6, textTransform: "uppercase" }}>Plan</div>
               <select
                 value={adminPlan}
-                onChange={(e) => setAdminPlan(e.target.value as typeof adminPlan)}
+                onChange={(e) => {
+                  setAdminPlan(e.target.value as typeof adminPlan);
+                  setAdminExpiry("");
+                }}
                 style={{
                   width: "100%", padding: "9px 12px", background: "var(--ink3)",
                   border: "1px solid var(--line2)", borderRadius: 9, color: "var(--text)",
@@ -298,6 +335,7 @@ export default function Account() {
                 <option value="free">free</option>
                 <option value="weekly">weekly</option>
                 <option value="monthly">monthly</option>
+                <option value="yearly">yearly</option>
               </select>
             </div>
             <div>
@@ -313,13 +351,24 @@ export default function Account() {
               />
             </div>
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 14, fontSize: ".82rem", color: "var(--text)" }}>
+            <input
+              type="checkbox"
+              checked={adminRole}
+              onChange={(e) => setAdminRole(e.target.checked)}
+            />
+            Bu kullanıcı admin olsun
+          </label>
+          <div style={{ marginTop: 8, fontSize: ".72rem", color: "var(--t3)", lineHeight: 1.5 }}>
+            Bitiş tarihi boş bırakılırsa plan haftalık için 7 gün, aylık için 1 ay, yıllık için 1 yıl otomatik açılır.
+          </div>
           <button
             className="btn btn-primary"
             style={{ marginTop: 14 }}
             onClick={handleSetPlan}
             disabled={adminLoading}
           >
-            {adminLoading ? <><span className="spin" />Kaydediliyor...</> : "✓ Planı Kaydet"}
+            {adminLoading ? <><span className="spin" />Kaydediliyor...</> : "✓ Erişim ve Yetkiyi Kaydet"}
           </button>
 
           <div style={{ marginTop: 20, padding: "14px", background: "var(--ink3)", borderRadius: 9 }}>

@@ -67,7 +67,7 @@ const POTENTIAL_QUESTION_STYLES: Record<string, string> = {
 
 export default function Quiz({ mode = "standard" }: { mode?: "standard" | "potential" }) {
   const isPotential = mode === "potential";
-  const { state, saveState, isPro, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
+  const { state, saveState, isPro, checkLimit, markSeenQ, quizTarget, setQuizTarget, setCurrentPage } = useApp();
 
   const [phase, setPhase] = useState<"setup" | "quiz" | "result">("setup");
   const [cat, setCat] = useState(isPotential ? "Anatomi" : (quizTarget?.cat || "Kardiyoloji"));
@@ -124,6 +124,11 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
   useEffect(() => () => stopTimer(), []);
 
   async function generateQuestions() {
+    if (!isPotential && !checkLimit("quiz")) {
+      toast.info("Günlük 5 ücretsiz soru hakkın doldu. Pro planla sınırsız devam edebilirsin.");
+      setCurrentPage("pricing");
+      return;
+    }
     setLoading(true);
     setPhase("quiz");
     setCurrent(0);
@@ -171,6 +176,9 @@ export default function Quiz({ mode = "standard" }: { mode?: "standard" | "poten
           visualCaption: (q.visualCaption || "").slice(0, 120),
         }));
         setQuestions(await enrichQuestionsWithSourceImages(cachedQuestions, count));
+        if (!isPotential && !isPro()) {
+          saveState({ ...state, dailyQuizDate: toDay(), dailyQuizCount: 5 });
+        }
         markSeenQ(selectedCached.map((q) => q._fid!).filter(Boolean));
         setLoading(false);
         if (timerMode) startTimer();
@@ -305,6 +313,9 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
       await enrichQuestionsWithSourceImages(qs, count);
 
       setQuestions(qs);
+      if (!isPotential && !isPro()) {
+        saveState({ ...state, dailyQuizDate: toDay(), dailyQuizCount: 5 });
+      }
       // Save and immediately mark as seen so they never repeat
       fbSaveQuestions(cachedKey, diff, qs)
         .then((savedIds) => { if (savedIds.length) markSeenQ(savedIds); })
@@ -374,6 +385,11 @@ Cevap indeksi 0-4 arasında olmalı. ${count} adet soru üret.`;
   }
 
   async function fetchAIExplain() {
+    if (!checkLimit("aiExplain")) {
+      toast.info("Ücretsiz AI analiz hakkın doldu. Pro planla sınırsız analiz kullanabilirsin.");
+      setCurrentPage("pricing");
+      return;
+    }
     const idx = currentRef.current;
     const sel = selectedRef.current;
     const q = questionsRef.current[idx];
@@ -405,6 +421,7 @@ Sadece HTML döndür (.tip, .warn, h3, p, ul kullan):`;
 
       if (currentRef.current === idx) {
         setAiExp(cached);
+        if (!isPro()) saveState({ ...state, aiExplainCount: (state.aiExplainCount || 0) + 1 });
       }
     } catch (e) {
       toast.error("Analiz yüklenemedi: " + (e as Error).message);

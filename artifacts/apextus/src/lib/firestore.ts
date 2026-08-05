@@ -298,7 +298,7 @@ export async function fbGetProfile(userId: string): Promise<{ username?: string;
 
 export async function fbSaveProfile(
   userId: string,
-  data: { name: string; username: string; email: string; createdAt: string }
+  data: { uid?: string; name: string; username: string; email: string; createdAt: string }
 ): Promise<void> {
-  await setDoc(doc(db, "profiles", userId), data);
+  await setDoc(doc(db, "profiles", userId), { uid: userId, ...data }, { merge: true });
 }

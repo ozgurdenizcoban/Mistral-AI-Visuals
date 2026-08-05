@@ -213,7 +213,7 @@ function shouldAlwaysShowReferenceImages(cat: string) {
 }
 
 export default function Notes() {
-  const { state, saveState, noteTarget, setNoteTarget, setCurrentPage, setQuizTarget } = useApp();
+  const { state, saveState, isPro, checkLimit, noteTarget, setNoteTarget, setCurrentPage, setQuizTarget } = useApp();
   const [selectedCat, setSelectedCat] = useState<string | null>(noteTarget?.cat ?? null);
   const [activeTopic, setActiveTopic] = useState<{ cat: string; icon: string; topic: string } | null>(noteTarget ?? null);
   const [noteHtml, setNoteHtml] = useState<string | null>(null);
@@ -364,7 +364,7 @@ export default function Notes() {
     }
   }, [activeTopic?.topic]);
 
-  function srMarkRead(topic: string) {
+  function srMarkRead(topic: string, countFreeNote = false) {
     const s = { ...state };
     s.sr = { ...s.sr };
     const cur = s.sr[topic] || { level: 0, studyCount: 0 };
@@ -372,10 +372,17 @@ export default function Notes() {
     const level = Math.min((cur.level || 0) + 1, SR_INTERVALS.length - 1);
     const nextDate = addDays(SR_INTERVALS[level]);
     s.sr[topic] = { level, studyCount: newCount, nextDate };
+    if (countFreeNote) s.noteCount = (s.noteCount || 0) + 1;
     saveState(s);
   }
 
   async function loadNote(cat: string, icon: string, topic: string) {
+    const isNewFreeNote = !isPro() && !(state.sr?.[topic]?.studyCount > 0);
+    if (isNewFreeNote && !checkLimit("notes")) {
+      toast.info("Ücretsiz konu notu hakkın doldu. Pro planla tüm konu notlarını açabilirsin.");
+      setCurrentPage("pricing");
+      return;
+    }
     if (noteCache[topic]) {
       setNoteHtml(noteCache[topic]);
       return;
@@ -383,7 +390,7 @@ export default function Notes() {
     setNoteLoading(true);
     setNoteStage("Kapsam hazırlanıyor");
     setNoteHtml(null);
-    srMarkRead(topic);
+    srMarkRead(topic, isNewFreeNote);
 
     try {
       const cached = await fbGetNote(topic);

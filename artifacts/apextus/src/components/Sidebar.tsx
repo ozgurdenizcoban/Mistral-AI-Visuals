@@ -1,5 +1,5 @@
 import { signOut } from "firebase/auth";
-import { Activity, BarChart3, BookOpen, Brain, CalendarDays, ChevronRight, ClipboardCheck, Home, LogOut, Settings, Sparkles, Target } from "lucide-react";
+import { Activity, BarChart3, BookOpen, Brain, CalendarDays, ChevronRight, ClipboardCheck, Crown, Home, LogOut, Settings, Sparkles, Target } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 
@@ -41,6 +41,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
         <small>Genel doğruluk: %{pct}</small>
       </div>
       <div className="sidebar-footer">
+        <button onClick={() => go("pricing")}><Crown size={17} /> Planlar</button>
         <button onClick={() => go("account")}><Settings size={17} /> Ayarlar</button>
         <button onClick={() => signOut(auth)}><LogOut size={17} /> Çıkış yap</button>
       </div>
